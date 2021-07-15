@@ -115,5 +115,19 @@ Using `delegates` and `tokens` it is possible to query all available allowances 
 truffle compile
 truffle test
 
+## Changes
 
+1). EndsOn
+- In `SetAllowance` function added endsOn param to stop recurring payment
+- and `executeAllowanceTransfer` in i have checked endOn param and decrease by one each time and once it reaches thresold it stop to giving payment
+- One more variable, `notEndsOn` which is set to -1 for if user does not want to stop recurring param
+
+2). Chainlink Integration
+- If user wants to give allowance in fiat amount then price oracle will be needed.
+- When user give fiatAmount we will calculate corresponding quantity of token to give allowance.
+- there is one more fact, if allowance in fiat is $500 and price of token is $1000
+  then 500/1000 = 0.5 eth, this calculation is not possible in solidity so we have used one open-source library FixidityLib
+
+3). SetGelatoAdddress
+- If owner wants to change Gelato address then owner can set using this function
 
