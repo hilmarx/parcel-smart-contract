@@ -131,3 +131,14 @@ truffle test
 3). SetGelatoAdddress
 - If owner wants to change Gelato address then owner can set using this function
 
+4). SetMaxGasPrice
+- There is one `maxGasPrice` mapping. using that delegate can set max gas price when gelato execute payment for them.
+
+5). checkSignature
+- In Check signature, We have added one more require to allow Gelato address to call execution of payment to delegate
+
+6). Remove payment params.
+- Removed unnecessary payment params from generateTransferHash, generateTransferHashData, executeAllowanceTransfer
+
+7). ETH address
+- added hardcoded ETH address for transfer function if token address is ETH then it should pay in eth token.
