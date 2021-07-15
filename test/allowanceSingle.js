@@ -27,8 +27,8 @@ contract('AllowanceModule delegate', function(accounts) {
         // Create Master Copies
         let amodule = await AllowanceModule.deployed()
         console.log(amodule.address)
-        safeModule = await AllowanceModule.new()
-        // safeModule = await AllowanceModule.new(lw.accounts[0])
+        // safeModule = await AllowanceModule.new()
+        safeModule = await AllowanceModule.new(lw.accounts[0])
 
         const gnosisSafeMasterCopy = await GnosisSafe.new({ from: accounts[0] })
         const proxy = await GnosisSafeProxy.new(gnosisSafeMasterCopy.address, { from: accounts[0] })
@@ -88,7 +88,7 @@ contract('AllowanceModule delegate', function(accounts) {
 
         let nonce = tokenAllowance[4]
         let transferHash = await safeModule.generateTransferHash(
-            gnosisSafe.address, token.address, accounts[1], 60, ADDRESS_0, 0, nonce
+            gnosisSafe.address, token.address, accounts[1], 60, ADDRESS_0, nonce
         )
         let signature = utils.signTransaction(lw, [lw.accounts[4]], transferHash)
 
@@ -156,7 +156,7 @@ contract('AllowanceModule delegate', function(accounts) {
 
         let nonce = tokenAllowance[4]
         let transferHash = await safeModule.generateTransferHash(
-            gnosisSafe.address, ADDRESS_0, lw.accounts[0], web3.utils.toWei("0.001", 'ether'), ADDRESS_0, 0, nonce
+            gnosisSafe.address, ADDRESS_0, lw.accounts[0], web3.utils.toWei("0.001", 'ether'), ADDRESS_0, nonce
         )
         let signature = utils.signTransaction(lw, [lw.accounts[4]], transferHash)
 
@@ -179,7 +179,7 @@ contract('AllowanceModule delegate', function(accounts) {
 
         nonce = tokenAllowance[4]
         transferHash = await safeModule.generateTransferHash(
-            gnosisSafe.address, ADDRESS_0, lw.accounts[0], web3.utils.toWei("0.001", 'ether'), ADDRESS_0, 0, nonce
+            gnosisSafe.address, ADDRESS_0, lw.accounts[0], web3.utils.toWei("0.001", 'ether'), ADDRESS_0, nonce
         )
         signature = utils.signTransaction(lw, [lw.accounts[4]], transferHash)
 

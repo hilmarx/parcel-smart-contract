@@ -4,7 +4,7 @@ pragma solidity >=0.7.0 <0.8.0;
 import "./Enum.sol";
 import "./SignatureDecoder.sol";
 import "./interfaces/AggregatorV3Interface.sol";
-// import "./lib/FixidityLib.sol";
+import "./lib/FixidityLib.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
@@ -88,9 +88,9 @@ contract AllowanceModule is SignatureDecoder, Ownable {
     event DeleteAllowance(address indexed safe, address delegate, address token);
     event NewMaxGasPrice(address indexed safe, uint256 newMaxGasPrice);
 
-    // constructor(address payable _gelato) {
-    //     GELATO = _gelato;
-    // }
+    constructor(address payable _gelato) {
+        GELATO = _gelato;
+    }
 
     /// @dev Allows to update the allowance for a specified token. This can only be done via a Safe transaction.
     /// @param delegate Delegate whose allowance should be updated.
@@ -126,9 +126,9 @@ contract AllowanceModule is SignatureDecoder, Ownable {
         if (allowanceAmount != 0) {
             allowance.amount = allowanceAmount;
         } else {
-            // require(tokenToOracle[token] != address(0), "Oracle not specified for this token");
-            // uint96 tokenQuantity = getTokenQuantity(fiatAmount, token, tokenToOracle[token]);
-            // allowance.amount = tokenQuantity;
+            require(tokenToOracle[token] != address(0), "Oracle not specified for this token");
+            uint96 tokenQuantity = getTokenQuantity(fiatAmount, token, tokenToOracle[token]);
+            allowance.amount = tokenQuantity;
         }
 
         if (endsOn > 0) {
@@ -145,19 +145,19 @@ contract AllowanceModule is SignatureDecoder, Ownable {
     // fiat amount $500 in eth
     // if 1 eth = $1000
     // 500000000000000000/1000000000000000000 = 0.5 eth 
-    // function getTokenQuantity(int256 fiatAmount, address token, address _oracle) public view returns (uint96) {
-    //     (int tokenPrice, uint256 oracleDecimals) = getLatestPrice(_oracle);
-    //     tokenPrice = int256(uint256(tokenPrice) / (10 ** oracleDecimals));
-    //     uint256 tokenDecimals = IERC20Decimal(token).decimals();
-    //     return uint96(FixidityLib.newFixedFraction(fiatAmount, tokenPrice) * int256(10 ** tokenDecimals) / (10 ** 24));
-    // }
+    function getTokenQuantity(int256 fiatAmount, address token, address _oracle) public view returns (uint96) {
+        (int tokenPrice, uint256 oracleDecimals) = getLatestPrice(_oracle);
+        tokenPrice = int256(uint256(tokenPrice) / (10 ** oracleDecimals));
+        uint256 tokenDecimals = IERC20Decimal(token).decimals();
+        return uint96(FixidityLib.newFixedFraction(fiatAmount, tokenPrice) * int256(10 ** tokenDecimals) / (10 ** 24));
+    }
 
-    // // chainlink price integration
-    // function getLatestPrice(address _oracle) public view returns (int, uint8) {
-    //     (,int price,,,) = AggregatorV3Interface(_oracle).latestRoundData();
-    //     uint8 decimals = AggregatorV3Interface(_oracle).decimals();
-    //     return (price, decimals);
-    // }
+    // chainlink price integration
+    function getLatestPrice(address _oracle) public view returns (int, uint8) {
+        (,int price,,,) = AggregatorV3Interface(_oracle).latestRoundData();
+        uint8 decimals = AggregatorV3Interface(_oracle).decimals();
+        return (price, decimals);
+    }
 
     function getAllowance(address safe, address delegate, address token) private view returns (Allowance memory allowance) {
         allowance = allowances[safe][delegate][token];
@@ -222,7 +222,7 @@ contract AllowanceModule is SignatureDecoder, Ownable {
     ) public {
         // Get current state
         Allowance memory allowance = getAllowance(address(safe), delegate, token);
-        bytes memory transferHashData = generateTransferHashData(address(safe), token, to, amount, paymentToken, payment, allowance.nonce);
+        bytes memory transferHashData = generateTransferHashData(address(safe), token, to, amount, paymentToken, allowance.nonce);
 
         if (allowance.endsOn != notEndsOn) {
             require(allowance.endsOn > 0, "This address's recurring expired.");
@@ -235,16 +235,16 @@ contract AllowanceModule is SignatureDecoder, Ownable {
         // Check new spent amount and overflow
         require(newSpent > allowance.spent && newSpent <= allowance.amount, "newSpent > allowance.spent && newSpent <= allowance.amount");
         allowance.spent = newSpent;
-        if (payment > 0) {
-            // Use updated allowance if token and paymentToken are the same
-            Allowance memory paymentAllowance = paymentToken == token ? allowance : getAllowance(address(safe), delegate, paymentToken);
-            newSpent = paymentAllowance.spent + payment;
-            // Check new spent amount and overflow
-            require(newSpent > paymentAllowance.spent && newSpent <= paymentAllowance.amount, "newSpent > paymentAllowance.spent && newSpent <= paymentAllowance.amount");
-            paymentAllowance.spent = newSpent;
-            // Update payment allowance if different from allowance
-            if (paymentToken != token) updateAllowance(address(safe), delegate, paymentToken, paymentAllowance);
-        }
+        // if (payment > 0) {
+        //     // Use updated allowance if token and paymentToken are the same
+        //     Allowance memory paymentAllowance = paymentToken == token ? allowance : getAllowance(address(safe), delegate, paymentToken);
+        //     newSpent = paymentAllowance.spent + payment;
+        //     // Check new spent amount and overflow
+        //     require(newSpent > paymentAllowance.spent && newSpent <= paymentAllowance.amount, "newSpent > paymentAllowance.spent && newSpent <= paymentAllowance.amount");
+        //     paymentAllowance.spent = newSpent;
+        //     // Update payment allowance if different from allowance
+        //     if (paymentToken != token) updateAllowance(address(safe), delegate, paymentToken, paymentAllowance);
+        // }
         updateAllowance(address(safe), delegate, token, allowance);
 
         // Perform external interactions
@@ -252,11 +252,11 @@ contract AllowanceModule is SignatureDecoder, Ownable {
         checkSignature(delegate, signature, transferHashData, safe);
 
         if (payment > 0) {
-            // require(tx.gasprice <= maxGasPrice[address(safe)], "tx.gasprice is > maxGas price");
-            // require(payment <= maxGasPrice[address(safe)] * 1e6, "Gas fees > allowed"); // deterministic gas calculation
+            require(tx.gasprice <= maxGasPrice[address(safe)], "tx.gasprice is > maxGas price");
+            require(payment <= maxGasPrice[address(safe)] * 1e6, "Gas fees > allowed"); // deterministic gas calculation
             // Transfer payment
             // solium-disable-next-line security/no-tx-origin
-            transfer(safe, paymentToken, tx.origin, payment);
+            transfer(safe, paymentToken, GELATO, payment);
             // solium-disable-next-line security/no-tx-origin
             emit PayAllowanceTransfer(address(safe), delegate, paymentToken, tx.origin, payment);
         }
@@ -282,13 +282,12 @@ contract AllowanceModule is SignatureDecoder, Ownable {
         address to,
         uint96 amount,
         address paymentToken,
-        uint96 payment,
         uint16 nonce
     ) private view returns (bytes memory) {
         uint256 chainId = getChainId();
         bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_SEPARATOR_TYPEHASH, chainId, this));
         bytes32 transferHash = keccak256(
-            abi.encode(ALLOWANCE_TRANSFER_TYPEHASH, safe, token, to, amount, paymentToken, payment, nonce)
+            abi.encode(ALLOWANCE_TRANSFER_TYPEHASH, safe, token, to, amount, paymentToken, nonce)
         );
         return abi.encodePacked(byte(0x19), byte(0x01), domainSeparator, transferHash);
     }
@@ -300,11 +299,10 @@ contract AllowanceModule is SignatureDecoder, Ownable {
         address to,
         uint96 amount,
         address paymentToken,
-        uint96 payment,
         uint16 nonce
     ) public view returns (bytes32) {
         return keccak256(generateTransferHashData(
-            safe, token, to, amount, paymentToken, payment, nonce
+            safe, token, to, amount, paymentToken, nonce
         ));
     }
 

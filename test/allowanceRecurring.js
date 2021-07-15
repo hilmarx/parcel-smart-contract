@@ -27,7 +27,7 @@ contract('AllowanceModule', function(accounts) {
 
         // Create Master Copies
         safeModule = await AllowanceModule.new(lw.accounts[0])
-        
+
         const gnosisSafeMasterCopy = await GnosisSafe.new({ from: accounts[0] })
         const proxy = await GnosisSafeProxy.new(gnosisSafeMasterCopy.address, { from: accounts[0] })
         gnosisSafe = await GnosisSafe.at(proxy.address)
@@ -91,7 +91,7 @@ contract('AllowanceModule', function(accounts) {
 
         let nonce = allowance[4]
         let transferHash = await safeModule.generateTransferHash(
-            gnosisSafe.address, token.address, accounts[1], 60, ADDRESS_0, 0, nonce
+            gnosisSafe.address, token.address, accounts[1], 60, ADDRESS_0, nonce
         )
         let signature = utils.signTransaction(lw, [lw.accounts[4]], transferHash)
 
@@ -115,7 +115,7 @@ contract('AllowanceModule', function(accounts) {
         // Check that it fails over limit
         nonce = allowance[4]
         transferHash = await safeModule.generateTransferHash(
-            gnosisSafe.address, token.address, accounts[1], 45, ADDRESS_0, 0, nonce
+            gnosisSafe.address, token.address, accounts[1], 45, ADDRESS_0, nonce
         )
         signature = utils.signTransaction(lw, [lw.accounts[4]], transferHash)
         utils.assertRejects(
@@ -126,7 +126,7 @@ contract('AllowanceModule', function(accounts) {
         )
         await wait(12*60*60)
         transferHash = await safeModule.generateTransferHash(
-            gnosisSafe.address, token.address, accounts[1], 40, ADDRESS_0, 0, nonce
+            gnosisSafe.address, token.address, accounts[1], 40, ADDRESS_0, nonce
         )
         signature = utils.signTransaction(lw, [lw.accounts[4]], transferHash)
         utils.logGasUsage(
@@ -149,7 +149,7 @@ contract('AllowanceModule', function(accounts) {
         await wait(12*60*60 + 45*60)
         nonce = allowance[4]
         transferHash = await safeModule.generateTransferHash(
-            gnosisSafe.address, token.address, accounts[1], 45, ADDRESS_0, 0, nonce
+            gnosisSafe.address, token.address, accounts[1], 45, ADDRESS_0, nonce
         )
         signature = utils.signTransaction(lw, [lw.accounts[4]], transferHash)
         utils.logGasUsage(

@@ -110,15 +110,10 @@ Using `delegates` and `tokens` it is possible to query all available allowances 
 - The information provided by `delegates` and `tokens` could be rebuilt using events and therefore these would not be necessary in the contract (this would make some consistency checks unnecessary and save gas).
 - The bytes assigned to different parts of the `Allowance` struct could be optimized.
 
-## Running tests
+## Running and Compiling tests
 
-```bash
-yarn
-yarn test
-```
+truffle compile
+truffle test
 
-## Compiling contracts
-```bash
-yarn
-yarn compile
-```
+
+

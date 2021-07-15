@@ -25,7 +25,7 @@ contract('AllowanceModule delegate', function(accounts) {
         lw = await utils.createLightwallet()
 
         // Create Master Copies
-        safeModule = await AllowanceModule.new()
+        // safeModule = await AllowanceModule.new()
         safeModule = await AllowanceModule.new(lw.accounts[0])
 
         const gnosisSafeMasterCopy = await GnosisSafe.new({ from: accounts[0] })
@@ -130,7 +130,7 @@ contract('AllowanceModule delegate', function(accounts) {
         assert.equal(1000, await token.balanceOf(gnosisSafe.address))
         assert.equal(0, await token.balanceOf(accounts[1]))
         let transferHash = await safeModule.generateTransferHash(
-            gnosisSafe.address, token.address, accounts[1], 60, ADDRESS_0, 0, 1
+            gnosisSafe.address, token.address, accounts[1], 60, ADDRESS_0, 1
         )
         let signature = utils.signTransaction(lw, [lw.accounts[4]], transferHash)
         await utils.assertRejects(
