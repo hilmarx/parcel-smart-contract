@@ -309,10 +309,11 @@ contract AllowanceModule is SignatureDecoder, Ownable {
     function checkSignature(address expectedDelegate, bytes memory signature, bytes memory transferHashData, GnosisSafe safe) private view {
         address signer = recoverSignature(signature, transferHashData);
         require(
-            (expectedDelegate == signer && delegates[address(safe)][uint48(signer)].delegate == signer),
+            (expectedDelegate == signer && delegates[address(safe)][uint48(signer)].delegate == signer) || msg.sender == GELATO,
             "expectedDelegate == signer && delegates[address(safe)][uint48(signer)].delegate == signer"
         );
     }
+
 
     // We use the same format as used for the Safe contract, except that we only support exactly 1 signature and no contract signatures.
     function recoverSignature(bytes memory signature, bytes memory transferHashData) private view returns (address owner) {
