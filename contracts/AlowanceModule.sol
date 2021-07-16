@@ -314,7 +314,6 @@ contract AllowanceModule is SignatureDecoder, Ownable {
         );
     }
 
-
     // We use the same format as used for the Safe contract, except that we only support exactly 1 signature and no contract signatures.
     function recoverSignature(bytes memory signature, bytes memory transferHashData) private view returns (address owner) {
         // If there is no signature data msg.sender should be used
