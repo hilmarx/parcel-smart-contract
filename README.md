@@ -142,3 +142,4 @@ truffle test
 
 7). ETH address
 - added hardcoded ETH address for transfer function if token address is ETH then it should pay in eth token.
+

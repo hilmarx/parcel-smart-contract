@@ -15,7 +15,6 @@ interface IERC20Decimal is IERC20{
     function decimals() external view returns (uint256);
 }
 
-
 interface GnosisSafe {
     /// @dev Allows a Module to execute a Safe transaction without any further confirmations.
     /// @param to Destination address of module transaction.
@@ -144,7 +143,7 @@ contract AllowanceModule is SignatureDecoder, Ownable {
     // calculate token quantity from fiat amount
     // fiat amount $500 in eth
     // if 1 eth = $1000
-    // 500000000000000000/1000000000000000000 = 0.5 eth 
+    // 500000000000000000/1000000000000000000 = 0.5 eth
     function getTokenQuantity(int256 fiatAmount, address token, address _oracle) public view returns (uint96) {
         (int tokenPrice, uint256 oracleDecimals) = getLatestPrice(_oracle);
         tokenPrice = int256(uint256(tokenPrice) / (10 ** oracleDecimals));
