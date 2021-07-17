@@ -9,3 +9,4 @@ coverage*
 edited-contracts
 notes
 test2
+contracts/chainlink.sol
