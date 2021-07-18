@@ -143,7 +143,7 @@ contract AllowanceModule is SignatureDecoder, Ownable {
     // calculate token quantity from fiat amount
     // fiat amount $500 in eth
     // if 1 eth = $1000
-    // 500000000000000000/1000000000000000000 = 0.5 eth
+    // 500000000000000000/1000000000000000000 = 0.5 eth 
     function getTokenQuantity(int256 fiatAmount, address token, address _oracle) public view returns (uint96) {
         (int tokenPrice, uint256 oracleDecimals) = getLatestPrice(_oracle);
         tokenPrice = int256(uint256(tokenPrice) / (10 ** oracleDecimals));
@@ -234,16 +234,6 @@ contract AllowanceModule is SignatureDecoder, Ownable {
         // Check new spent amount and overflow
         require(newSpent > allowance.spent && newSpent <= allowance.amount, "newSpent > allowance.spent && newSpent <= allowance.amount");
         allowance.spent = newSpent;
-        // if (payment > 0) {
-        //     // Use updated allowance if token and paymentToken are the same
-        //     Allowance memory paymentAllowance = paymentToken == token ? allowance : getAllowance(address(safe), delegate, paymentToken);
-        //     newSpent = paymentAllowance.spent + payment;
-        //     // Check new spent amount and overflow
-        //     require(newSpent > paymentAllowance.spent && newSpent <= paymentAllowance.amount, "newSpent > paymentAllowance.spent && newSpent <= paymentAllowance.amount");
-        //     paymentAllowance.spent = newSpent;
-        //     // Update payment allowance if different from allowance
-        //     if (paymentToken != token) updateAllowance(address(safe), delegate, paymentToken, paymentAllowance);
-        // }
         updateAllowance(address(safe), delegate, token, allowance);
 
         // Perform external interactions
