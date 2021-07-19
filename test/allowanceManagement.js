@@ -130,12 +130,12 @@ contract('AllowanceModule delegate', function(accounts) {
         assert.equal(1000, await token.balanceOf(gnosisSafe.address))
         assert.equal(0, await token.balanceOf(accounts[1]))
         let transferHash = await safeModule.generateTransferHash(
-            gnosisSafe.address, token.address, accounts[1], 60, ADDRESS_0, 1
+            gnosisSafe.address, token.address, accounts[1], 60, 1
         )
         let signature = utils.signTransaction(lw, [lw.accounts[4]], transferHash)
         await utils.assertRejects(
             safeModule.executeAllowanceTransfer(
-                gnosisSafe.address, token.address, accounts[1], 60, ADDRESS_0, 0, lw.accounts[4], signature
+                gnosisSafe.address, token.address, accounts[1], 60, 0, lw.accounts[4], signature
             ),
             'executeAllowanceTransfer'
         )
@@ -165,7 +165,7 @@ contract('AllowanceModule delegate', function(accounts) {
         console.log(signature)
         await utils.assertRejects(
             safeModule.executeAllowanceTransfer(
-                gnosisSafe.address, token.address, accounts[1], 60, ADDRESS_0, 0, ADDRESS_0, signature
+                gnosisSafe.address, token.address, accounts[1], 60, 0, ADDRESS_0, signature
             ),
             'executeAllowanceTransfer'
         )

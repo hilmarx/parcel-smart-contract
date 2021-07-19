@@ -135,45 +135,45 @@ contract('Fiat and EndsOn', function(accounts) {
 
         let nonce = tokenAllowance[4]
         let transferHash = await safeModule.generateTransferHash(
-            gnosisSafe.address, ADDRESS_0, lw.accounts[0], web3.utils.toWei("0.001", 'ether'), ADDRESS_0, nonce
+            gnosisSafe.address, ADDRESS_0, lw.accounts[0], web3.utils.toWei("0.001", 'ether'), nonce
         )
         let signature = utils.signTransaction(lw, [lw.accounts[4]], transferHash)
         utils.logGasUsage(
             'executeAllowanceTransfer',
             await safeModule.executeAllowanceTransfer(
-                gnosisSafe.address, ADDRESS_0, lw.accounts[0], web3.utils.toWei("0.001", 'ether'), ADDRESS_0, 0, lw.accounts[4], signature
+                gnosisSafe.address, ADDRESS_0, lw.accounts[0], web3.utils.toWei("0.001", 'ether'), 0, lw.accounts[4], signature
             )
         )
 
         tokenAllowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[4], ADDRESS_0)
         nonce = tokenAllowance[4]
         transferHash = await safeModule.generateTransferHash(
-            gnosisSafe.address, ADDRESS_0, lw.accounts[0], web3.utils.toWei("0.001", 'ether'), ADDRESS_0, nonce
+            gnosisSafe.address, ADDRESS_0, lw.accounts[0], web3.utils.toWei("0.001", 'ether'), nonce
         )
         signature = utils.signTransaction(lw, [lw.accounts[4]], transferHash)
         utils.logGasUsage(
             'executeAllowanceTransfer',
             await safeModule.executeAllowanceTransfer(
-                gnosisSafe.address, ADDRESS_0, lw.accounts[0], web3.utils.toWei("0.001", 'ether'), ADDRESS_0, 0, lw.accounts[4], signature
+                gnosisSafe.address, ADDRESS_0, lw.accounts[0], web3.utils.toWei("0.001", 'ether'), 0, lw.accounts[4], signature
             )
         )
 
         tokenAllowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[4], ADDRESS_0)
         nonce = tokenAllowance[4]
         transferHash = await safeModule.generateTransferHash(
-            gnosisSafe.address, ADDRESS_0, lw.accounts[0], web3.utils.toWei("0.001", 'ether'), ADDRESS_0, nonce
+            gnosisSafe.address, ADDRESS_0, lw.accounts[0], web3.utils.toWei("0.001", 'ether'), nonce
         )
         signature = utils.signTransaction(lw, [lw.accounts[4]], transferHash)
         utils.logGasUsage(
             'executeAllowanceTransfer',
             await safeModule.executeAllowanceTransfer(
-                gnosisSafe.address, ADDRESS_0, lw.accounts[0], web3.utils.toWei("0.001", 'ether'), ADDRESS_0, 0, lw.accounts[4], signature
+                gnosisSafe.address, ADDRESS_0, lw.accounts[0], web3.utils.toWei("0.001", 'ether'), 0, lw.accounts[4], signature
             )
         )
 
         await utils.assertRejects(
             safeModule.executeAllowanceTransfer(
-                gnosisSafe.address, ADDRESS_0, lw.accounts[0], web3.utils.toWei("0.001", 'ether'), ADDRESS_0, 0, lw.accounts[4], signature
+                gnosisSafe.address, ADDRESS_0, lw.accounts[0], web3.utils.toWei("0.001", 'ether'), 0, lw.accounts[4], signature
             ),
             'executeAllowanceTransfer'
         )
