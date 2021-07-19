@@ -127,9 +127,10 @@ contract AllowanceModule is SignatureDecoder, Ownable {
         if (allowanceAmount != 0) {
             allowance.amount = allowanceAmount;
         } else {
-            require(fiatAmount != 0, "Fiat Amount Can't Zero");
+            require(fiatAmount != 0, "Fiat Amount Can't be Zero");
             require(tokenToOracle[token] != address(0), "Oracle not specified for this token");
             uint96 tokenQuantity = getTokenQuantity(fiatAmount, token, tokenToOracle[token]);
+            require(tokenQuantity != 0, "Token Quantity Can't be Zero");
             allowance.amount = tokenQuantity;
         }
 
