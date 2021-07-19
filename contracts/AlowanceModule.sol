@@ -86,6 +86,8 @@ contract AllowanceModule is SignatureDecoder, Ownable {
     event ResetAllowance(address indexed safe, address delegate, address token);
     event DeleteAllowance(address indexed safe, address delegate, address token);
     event NewMaxGasPrice(address indexed safe, uint256 newMaxGasPrice);
+    event AddTokenOracle(address indexed token, address indexed oracle);
+    event SetGelatoAddress(address indexed gelato);
 
     constructor(address payable _gelato) {
         GELATO = _gelato;
@@ -374,7 +376,7 @@ contract AllowanceModule is SignatureDecoder, Ownable {
         emit AddDelegate(msg.sender, delegate);
     }
 
-    /// @dev Allows to add a delegate.
+    /// @dev Allows to add a set max gas price for user
     /// @param newMaxGasPrice New Max Gas Price to set.
     function setMaxGasPrice(uint256 newMaxGasPrice) public {
         maxGasPrice[msg.sender] = newMaxGasPrice;
@@ -435,9 +437,11 @@ contract AllowanceModule is SignatureDecoder, Ownable {
     function addTokenOracle(address token, address oracle) public onlyOwner {
         require(tokenToOracle[token] == address(0), "Oracle already specified");
         tokenToOracle[token] = oracle;
+        emit AddTokenOracle(token, oracle);
     }
 
     function setGelatoAddress(address payable gelato) public onlyOwner {
         GELATO = gelato;
+        emit SetGelatoAddress(gelato);
     }
 }

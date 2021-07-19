@@ -12,12 +12,10 @@ GnosisSafeProxy.setProvider(web3.currentProvider)
 
 const AllowanceModule = artifacts.require("./AllowanceModule.sol")
 const TestToken = artifacts.require("./TestToken.sol")
-const chainlink = artifacts.require("./chainlink.sol")
 const IERC20 = artifacts.require('IERC20')
 
 contract('Fiat and EndsOn', function(accounts) {
     
-    let chainlinkContract
     let lw
     let gnosisSafe
     let safeModule
@@ -33,8 +31,6 @@ contract('Fiat and EndsOn', function(accounts) {
     const ADDRESS_0 = "0x0000000000000000000000000000000000000000"
 
     beforeEach(async function() {
-        chainlinkContract = await chainlink.new()
-
         // Create lightwallet
         lw = await utils.createLightwallet()
 
