@@ -110,7 +110,14 @@ Using `delegates` and `tokens` it is possible to query all available allowances 
 - The information provided by `delegates` and `tokens` could be rebuilt using events and therefore these would not be necessary in the contract (this would make some consistency checks unnecessary and save gas).
 - The bytes assigned to different parts of the `Allowance` struct could be optimized.
 
-## Running and Compiling tests
+## Start Ganache-cli for mainnet fork in terminal1
+
+ganache-cli --fork https://mainnet.infura.io/v3/37bd907f93a146679960d54e729cd51a \
+ --unlock 0xB045FA6893B26807298E93377Cbb92d7f37B19eB
+
+`0xB045FA6893B26807298E93377Cbb92d7f37B19eB: <- this address id of UNI rich holder address to impersonate`
+
+## Running and Compiling tests in different terminal2
 
 truffle compile
 truffle test

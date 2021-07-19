@@ -1,7 +1,7 @@
-diff --git a/contracts/AlowanceModule.sol b/contracts/AlowanceModule.sol
-index be7dfe1385f91499f1842fb38093487d6b541c98..a069e207260c8b20e87721dc53cd2b344c0383c1 100644
---- a/contracts/AlowanceModule.sol
-+++ b/contracts/AlowanceModule.sol
+diff --git a/allowances/contracts/AlowanceModule.sol b/allowances/contracts/AlowanceModule.sol
+index be7dfe1385f91499f1842fb38093487d6b541c98..ad4498e5547c73956b94535b8cf3ab5338d49190 100644
+--- a/allowances/contracts/AlowanceModule.sol
++++ b/allowances/contracts/AlowanceModule.sol
 @@ -3,6 +3,17 @@ pragma solidity >=0.7.0 <0.8.0;
  
  import "./Enum.sol";
@@ -66,11 +66,13 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..a069e207260c8b20e87721dc53cd2b34
      event AddDelegate(address indexed safe, address delegate);
      event RemoveDelegate(address indexed safe, address delegate);
      event ExecuteAllowanceTransfer(address indexed safe, address delegate, address token, address to, uint96 value, uint16 nonce);
-@@ -63,6 +85,11 @@ contract AllowanceModule is SignatureDecoder {
+@@ -63,6 +85,13 @@ contract AllowanceModule is SignatureDecoder {
      event SetAllowance(address indexed safe, address delegate, address token, uint96 allowanceAmount, uint16 resetTime);
      event ResetAllowance(address indexed safe, address delegate, address token);
      event DeleteAllowance(address indexed safe, address delegate, address token);
 +    event NewMaxGasPrice(address indexed safe, uint256 newMaxGasPrice);
++    event AddTokenOracle(address indexed token, address indexed oracle);
++    event SetGelatoAddress(address indexed gelato);
 +
 +    constructor(address payable _gelato) {
 +        GELATO = _gelato;
@@ -78,7 +80,7 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..a069e207260c8b20e87721dc53cd2b34
  
      /// @dev Allows to update the allowance for a specified token. This can only be done via a Safe transaction.
      /// @param delegate Delegate whose allowance should be updated.
-@@ -70,7 +97,10 @@ contract AllowanceModule is SignatureDecoder {
+@@ -70,7 +99,10 @@ contract AllowanceModule is SignatureDecoder {
      /// @param allowanceAmount allowance in smallest token unit.
      /// @param resetTimeMin Time after which the allowance should reset
      /// @param resetBaseMin Time based on which the reset time should be increased
@@ -90,7 +92,7 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..a069e207260c8b20e87721dc53cd2b34
          public
      {
          require(delegate != address(0), "delegate != address(0)");
-@@ -91,11 +121,43 @@ contract AllowanceModule is SignatureDecoder {
+@@ -91,11 +123,47 @@ contract AllowanceModule is SignatureDecoder {
              allowance.lastResetMin = currentMin;
          }
          allowance.resetTimeMin = resetTimeMin;
@@ -99,6 +101,7 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..a069e207260c8b20e87721dc53cd2b34
 +        if (allowanceAmount != 0) {
 +            allowance.amount = allowanceAmount;
 +        } else {
++            require(fiatAmount != 0, "Fiat Amount Can't Zero");
 +            require(tokenToOracle[token] != address(0), "Oracle not specified for this token");
 +            uint96 tokenQuantity = getTokenQuantity(fiatAmount, token, tokenToOracle[token]);
 +            allowance.amount = tokenQuantity;
@@ -115,14 +118,17 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..a069e207260c8b20e87721dc53cd2b34
      }
  
 +    // calculate token quantity from fiat amount
-+    // fiat amount $500 in eth
-+    // if 1 eth = $1000
-+    // 500000000000000000/1000000000000000000 = 0.5 eth 
 +    function getTokenQuantity(int256 fiatAmount, address token, address _oracle) public view returns (uint96) {
 +        (int tokenPrice, uint256 oracleDecimals) = getLatestPrice(_oracle);
++        uint256 tokenDecimals;
++        if (token == ETH) {
++            tokenDecimals = 18;
++        } else {
++            tokenDecimals = IERC20Decimal(token).decimals();
++        }
++        tokenPrice = tokenPrice * int256(10 ** tokenDecimals);
 +        tokenPrice = int256(uint256(tokenPrice) / (10 ** oracleDecimals));
-+        uint256 tokenDecimals = IERC20Decimal(token).decimals();
-+        return uint96(FixidityLib.newFixedFraction(fiatAmount, tokenPrice) * int256(10 ** tokenDecimals) / (10 ** 24));
++        return uint96(uint256(FixidityLib.newFixedFraction(fiatAmount, tokenPrice)) * (10 ** (2 * tokenDecimals)) / (10 ** 24));
 +    }
 +
 +    // chainlink price integration
@@ -135,12 +141,27 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..a069e207260c8b20e87721dc53cd2b34
      function getAllowance(address safe, address delegate, address token) private view returns (Allowance memory allowance) {
          allowance = allowances[safe][delegate][token];
          // solium-disable-next-line security/no-block-members
-@@ -159,7 +221,12 @@ contract AllowanceModule is SignatureDecoder {
+@@ -143,7 +211,6 @@ contract AllowanceModule is SignatureDecoder {
+     /// @param token Token contract address.
+     /// @param to Address that should receive the tokens.
+     /// @param amount Amount that should be transferred.
+-    /// @param paymentToken Token that should be used to pay for the execution of the transfer.
+     /// @param payment Amount to should be paid for executing the transfer.
+     /// @param delegate Delegate whose allowance should be updated.
+     /// @param signature Signature generated by the delegate to authorize the transfer.
+@@ -152,14 +219,18 @@ contract AllowanceModule is SignatureDecoder {
+         address token,
+         address payable to,
+         uint96 amount,
+-        address paymentToken,
+         uint96 payment,
+         address delegate,
+         bytes memory signature
      ) public {
          // Get current state
          Allowance memory allowance = getAllowance(address(safe), delegate, token);
 -        bytes memory transferHashData = generateTransferHashData(address(safe), token, to, amount, paymentToken, payment, allowance.nonce);
-+        bytes memory transferHashData = generateTransferHashData(address(safe), token, to, amount, paymentToken, allowance.nonce);
++        bytes memory transferHashData = generateTransferHashData(address(safe), token, to, amount, allowance.nonce);
 +
 +        if (allowance.endsOn != notEndsOn) {
 +            require(allowance.endsOn > 0, "This address's recurring expired.");
@@ -149,7 +170,7 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..a069e207260c8b20e87721dc53cd2b34
  
          // Update state
          allowance.nonce = allowance.nonce + 1;
-@@ -167,16 +234,6 @@ contract AllowanceModule is SignatureDecoder {
+@@ -167,16 +238,6 @@ contract AllowanceModule is SignatureDecoder {
          // Check new spent amount and overflow
          require(newSpent > allowance.spent && newSpent <= allowance.amount, "newSpent > allowance.spent && newSpent <= allowance.amount");
          allowance.spent = newSpent;
@@ -166,7 +187,7 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..a069e207260c8b20e87721dc53cd2b34
          updateAllowance(address(safe), delegate, token, allowance);
  
          // Perform external interactions
-@@ -184,9 +241,11 @@ contract AllowanceModule is SignatureDecoder {
+@@ -184,11 +245,13 @@ contract AllowanceModule is SignatureDecoder {
          checkSignature(delegate, signature, transferHashData, safe);
  
          if (payment > 0) {
@@ -175,14 +196,18 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..a069e207260c8b20e87721dc53cd2b34
              // Transfer payment
              // solium-disable-next-line security/no-tx-origin
 -            transfer(safe, paymentToken, tx.origin, payment);
-+            transfer(safe, paymentToken, GELATO, payment);
++            transfer(safe, ETH, GELATO, payment);
              // solium-disable-next-line security/no-tx-origin
-             emit PayAllowanceTransfer(address(safe), delegate, paymentToken, tx.origin, payment);
+-            emit PayAllowanceTransfer(address(safe), delegate, paymentToken, tx.origin, payment);
++            emit PayAllowanceTransfer(address(safe), delegate, ETH, tx.origin, payment);
          }
-@@ -212,13 +271,12 @@ contract AllowanceModule is SignatureDecoder {
+         // Transfer token
+         transfer(safe, token, to, amount);
+@@ -211,14 +274,12 @@ contract AllowanceModule is SignatureDecoder {
+         address token,
          address to,
          uint96 amount,
-         address paymentToken,
+-        address paymentToken,
 -        uint96 payment,
          uint16 nonce
      ) private view returns (bytes memory) {
@@ -190,20 +215,21 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..a069e207260c8b20e87721dc53cd2b34
          bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_SEPARATOR_TYPEHASH, chainId, this));
          bytes32 transferHash = keccak256(
 -            abi.encode(ALLOWANCE_TRANSFER_TYPEHASH, safe, token, to, amount, paymentToken, payment, nonce)
-+            abi.encode(ALLOWANCE_TRANSFER_TYPEHASH, safe, token, to, amount, paymentToken, nonce)
++            abi.encode(ALLOWANCE_TRANSFER_TYPEHASH, safe, token, to, amount, ETH, nonce)
          );
          return abi.encodePacked(byte(0x19), byte(0x01), domainSeparator, transferHash);
      }
-@@ -230,18 +288,17 @@ contract AllowanceModule is SignatureDecoder {
+@@ -229,19 +290,17 @@ contract AllowanceModule is SignatureDecoder {
+         address token,
          address to,
          uint96 amount,
-         address paymentToken,
+-        address paymentToken,
 -        uint96 payment,
          uint16 nonce
      ) public view returns (bytes32) {
          return keccak256(generateTransferHashData(
 -            safe, token, to, amount, paymentToken, payment, nonce
-+            safe, token, to, amount, paymentToken, nonce
++            safe, token, to, amount, nonce
          ));
      }
  
@@ -215,7 +241,7 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..a069e207260c8b20e87721dc53cd2b34
              "expectedDelegate == signer && delegates[address(safe)][uint48(signer)].delegate == signer"
          );
      }
-@@ -274,7 +331,7 @@ contract AllowanceModule is SignatureDecoder {
+@@ -274,7 +333,7 @@ contract AllowanceModule is SignatureDecoder {
      }
  
      function transfer(GnosisSafe safe, address token, address payable to, uint96 amount) private {
@@ -224,11 +250,11 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..a069e207260c8b20e87721dc53cd2b34
              // solium-disable-next-line security/no-send
              require(safe.execTransactionFromModule(to, amount, "", Enum.Operation.Call), "Could not execute ether transfer");
          } else {
-@@ -317,6 +374,13 @@ contract AllowanceModule is SignatureDecoder {
+@@ -317,6 +376,13 @@ contract AllowanceModule is SignatureDecoder {
          emit AddDelegate(msg.sender, delegate);
      }
  
-+    /// @dev Allows to add a delegate.
++    /// @dev Allows to add a set max gas price for user
 +    /// @param newMaxGasPrice New Max Gas Price to set.
 +    function setMaxGasPrice(uint256 newMaxGasPrice) public {
 +        maxGasPrice[msg.sender] = newMaxGasPrice;
@@ -238,7 +264,7 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..a069e207260c8b20e87721dc53cd2b34
      /// @dev Allows to remove a delegate.
      /// @param delegate Delegate that should be removed.
      /// @param removeAllowances Indicator if allowances should also be removed. This should be set to `true` unless this causes an out of gas, in this case the allowances should be "manually" deleted via `deleteAllowance`.
-@@ -367,4 +431,13 @@ contract AllowanceModule is SignatureDecoder {
+@@ -367,4 +433,14 @@ contract AllowanceModule is SignatureDecoder {
              mstore(results, i)
          }
      }
@@ -246,11 +272,12 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..a069e207260c8b20e87721dc53cd2b34
 \ No newline at end of file
 +
 +    function addTokenOracle(address token, address oracle) public onlyOwner {
-+        require(tokenToOracle[token] == address(0), "Oracle already specified");
 +        tokenToOracle[token] = oracle;
++        emit AddTokenOracle(token, oracle);
 +    }
 +
 +    function setGelatoAddress(address payable gelato) public onlyOwner {
 +        GELATO = gelato;
++        emit SetGelatoAddress(gelato);
 +    }
 +}

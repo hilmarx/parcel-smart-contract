@@ -127,6 +127,7 @@ contract AllowanceModule is SignatureDecoder, Ownable {
         if (allowanceAmount != 0) {
             allowance.amount = allowanceAmount;
         } else {
+            require(fiatAmount != 0, "Fiat Amount Can't Zero");
             require(tokenToOracle[token] != address(0), "Oracle not specified for this token");
             uint96 tokenQuantity = getTokenQuantity(fiatAmount, token, tokenToOracle[token]);
             allowance.amount = tokenQuantity;
@@ -143,14 +144,17 @@ contract AllowanceModule is SignatureDecoder, Ownable {
     }
 
     // calculate token quantity from fiat amount
-    // fiat amount $500 in eth
-    // if 1 eth = $1000
-    // 500000000000000000/1000000000000000000 = 0.5 eth 
     function getTokenQuantity(int256 fiatAmount, address token, address _oracle) public view returns (uint96) {
         (int tokenPrice, uint256 oracleDecimals) = getLatestPrice(_oracle);
+        uint256 tokenDecimals;
+        if (token == ETH) {
+            tokenDecimals = 18;
+        } else {
+            tokenDecimals = IERC20Decimal(token).decimals();
+        }
+        tokenPrice = tokenPrice * int256(10 ** tokenDecimals);
         tokenPrice = int256(uint256(tokenPrice) / (10 ** oracleDecimals));
-        uint256 tokenDecimals = IERC20Decimal(token).decimals();
-        return uint96(FixidityLib.newFixedFraction(fiatAmount, tokenPrice) * int256(10 ** tokenDecimals) / (10 ** 24));
+        return uint96(uint256(FixidityLib.newFixedFraction(fiatAmount, tokenPrice)) * (10 ** (2 * tokenDecimals)) / (10 ** 24));
     }
 
     // chainlink price integration
@@ -431,7 +435,6 @@ contract AllowanceModule is SignatureDecoder, Ownable {
     }
 
     function addTokenOracle(address token, address oracle) public onlyOwner {
-        require(tokenToOracle[token] == address(0), "Oracle already specified");
         tokenToOracle[token] = oracle;
         emit AddTokenOracle(token, oracle);
     }
