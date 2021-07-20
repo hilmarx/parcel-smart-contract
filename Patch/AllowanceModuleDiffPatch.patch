@@ -1,8 +1,11 @@
 diff --git a/allowances/contracts/AlowanceModule.sol b/allowances/contracts/AlowanceModule.sol
-index be7dfe1385f91499f1842fb38093487d6b541c98..bec682edff5fe798e34f16a54e77e1fb4192ca60 100644
+index be7dfe1385f91499f1842fb38093487d6b541c98..b5b4948af0f5418a5a3df19d3c965986da4ea527 100644
 --- a/allowances/contracts/AlowanceModule.sol
 +++ b/allowances/contracts/AlowanceModule.sol
-@@ -3,6 +3,17 @@ pragma solidity >=0.7.0 <0.8.0;
+@@ -1,8 +1,20 @@
+ // SPDX-License-Identifier: LGPL-3.0-only
+ pragma solidity >=0.7.0 <0.8.0;
++pragma experimental ABIEncoderV2;
  
  import "./Enum.sol";
  import "./SignatureDecoder.sol";
@@ -20,7 +23,7 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..bec682edff5fe798e34f16a54e77e1fb
  
  interface GnosisSafe {
      /// @dev Allows a Module to execute a Safe transaction without any further confirmations.
-@@ -15,11 +26,15 @@ interface GnosisSafe {
+@@ -15,11 +27,15 @@ interface GnosisSafe {
          returns (bool success);
  }
  
@@ -37,7 +40,7 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..bec682edff5fe798e34f16a54e77e1fb
      bytes32 public constant DOMAIN_SEPARATOR_TYPEHASH = 0x47e79534a245952e8b16893a336b85a3d9ea9fa8c573f3d803afb92a79469218;
      // keccak256(
      //     "EIP712Domain(uint256 chainId,address verifyingContract)"
-@@ -32,12 +47,16 @@ contract AllowanceModule is SignatureDecoder {
+@@ -32,12 +48,16 @@ contract AllowanceModule is SignatureDecoder {
  
      // Safe -> Delegate -> Allowance
      mapping(address => mapping (address => mapping(address => Allowance))) public allowances;
@@ -54,7 +57,7 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..bec682edff5fe798e34f16a54e77e1fb
  
      // We use a double linked list for the delegates. The id is the first 6 bytes. 
      // To double check the address in case of collision, the address is part of the struct.
-@@ -54,8 +73,11 @@ contract AllowanceModule is SignatureDecoder {
+@@ -54,8 +74,11 @@ contract AllowanceModule is SignatureDecoder {
          uint16 resetTimeMin; // Maximum reset time span is 65k minutes
          uint32 lastResetMin;
          uint16 nonce;
@@ -66,7 +69,7 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..bec682edff5fe798e34f16a54e77e1fb
      event AddDelegate(address indexed safe, address delegate);
      event RemoveDelegate(address indexed safe, address delegate);
      event ExecuteAllowanceTransfer(address indexed safe, address delegate, address token, address to, uint96 value, uint16 nonce);
-@@ -63,6 +85,13 @@ contract AllowanceModule is SignatureDecoder {
+@@ -63,6 +86,13 @@ contract AllowanceModule is SignatureDecoder {
      event SetAllowance(address indexed safe, address delegate, address token, uint96 allowanceAmount, uint16 resetTime);
      event ResetAllowance(address indexed safe, address delegate, address token);
      event DeleteAllowance(address indexed safe, address delegate, address token);
@@ -80,7 +83,7 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..bec682edff5fe798e34f16a54e77e1fb
  
      /// @dev Allows to update the allowance for a specified token. This can only be done via a Safe transaction.
      /// @param delegate Delegate whose allowance should be updated.
-@@ -70,7 +99,10 @@ contract AllowanceModule is SignatureDecoder {
+@@ -70,7 +100,10 @@ contract AllowanceModule is SignatureDecoder {
      /// @param allowanceAmount allowance in smallest token unit.
      /// @param resetTimeMin Time after which the allowance should reset
      /// @param resetBaseMin Time based on which the reset time should be increased
@@ -92,7 +95,7 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..bec682edff5fe798e34f16a54e77e1fb
          public
      {
          require(delegate != address(0), "delegate != address(0)");
-@@ -91,11 +123,48 @@ contract AllowanceModule is SignatureDecoder {
+@@ -91,11 +124,70 @@ contract AllowanceModule is SignatureDecoder {
              allowance.lastResetMin = currentMin;
          }
          allowance.resetTimeMin = resetTimeMin;
@@ -119,17 +122,39 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..bec682edff5fe798e34f16a54e77e1fb
      }
  
 +    // calculate token quantity from fiat amount
-+    function getTokenQuantity(int256 fiatAmount, address token, address _oracle) public view returns (uint96) {
-+        (int tokenPrice, uint256 oracleDecimals) = getLatestPrice(_oracle);
-+        uint256 tokenDecimals;
-+        if (token == ETH) {
-+            tokenDecimals = 18;
-+        } else {
-+            tokenDecimals = IERC20Decimal(token).decimals();
-+        }
++    function getTokenQuantity(int256 fiatAmount, address token, address _oracle)
++        public view returns(uint96 tokenQuantity)
++    {
++        // Call Chainlink to fetch price and priceDecimals
++        (int tokenPrice, uint256 priceDecimals) = getLatestPrice(_oracle);
++
++        uint256 tokenDecimals = IERC20Decimal(token).decimals();
 +        tokenPrice = tokenPrice * int256(10 ** tokenDecimals);
-+        tokenPrice = int256(uint256(tokenPrice) / (10 ** oracleDecimals));
-+        return uint96(uint256(FixidityLib.newFixedFraction(fiatAmount, tokenPrice)) * (10 ** (2 * tokenDecimals)) / (10 ** 24));
++        
++        // if price is less than priceDecimals then call this to avoid ZERO
++        if(tokenPrice < int(10 ** priceDecimals)) {
++            uint remaind;
++            if (priceDecimals > (2 * tokenDecimals)) {
++                remaind = priceDecimals - (2 * tokenDecimals); 
++                remaind = priceDecimals - remaind;
++            } else {
++                remaind = 18;
++            }
++            
++            tokenPrice = int256(uint256(tokenPrice) * (10 ** remaind) / (10 ** priceDecimals));
++            tokenQuantity = uint96(
++                    uint256(FixidityLib.newFixedFraction(fiatAmount, tokenPrice))
++                    * (10 ** tokenDecimals)
++                );
++
++        } else {
++            tokenPrice = int256(uint256(tokenPrice) / (10 ** priceDecimals));
++            tokenQuantity = uint96(
++                    uint256(FixidityLib.newFixedFraction(fiatAmount, tokenPrice)) * 
++                    (10 ** (2 * tokenDecimals))
++                    / (10 ** 24)
++                );
++        }
 +    }
 +
 +    // chainlink price integration
@@ -142,7 +167,7 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..bec682edff5fe798e34f16a54e77e1fb
      function getAllowance(address safe, address delegate, address token) private view returns (Allowance memory allowance) {
          allowance = allowances[safe][delegate][token];
          // solium-disable-next-line security/no-block-members
-@@ -143,7 +212,6 @@ contract AllowanceModule is SignatureDecoder {
+@@ -143,7 +235,6 @@ contract AllowanceModule is SignatureDecoder {
      /// @param token Token contract address.
      /// @param to Address that should receive the tokens.
      /// @param amount Amount that should be transferred.
@@ -150,7 +175,7 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..bec682edff5fe798e34f16a54e77e1fb
      /// @param payment Amount to should be paid for executing the transfer.
      /// @param delegate Delegate whose allowance should be updated.
      /// @param signature Signature generated by the delegate to authorize the transfer.
-@@ -152,14 +220,18 @@ contract AllowanceModule is SignatureDecoder {
+@@ -152,14 +243,18 @@ contract AllowanceModule is SignatureDecoder {
          address token,
          address payable to,
          uint96 amount,
@@ -171,7 +196,7 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..bec682edff5fe798e34f16a54e77e1fb
  
          // Update state
          allowance.nonce = allowance.nonce + 1;
-@@ -167,16 +239,6 @@ contract AllowanceModule is SignatureDecoder {
+@@ -167,16 +262,6 @@ contract AllowanceModule is SignatureDecoder {
          // Check new spent amount and overflow
          require(newSpent > allowance.spent && newSpent <= allowance.amount, "newSpent > allowance.spent && newSpent <= allowance.amount");
          allowance.spent = newSpent;
@@ -188,7 +213,7 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..bec682edff5fe798e34f16a54e77e1fb
          updateAllowance(address(safe), delegate, token, allowance);
  
          // Perform external interactions
-@@ -184,11 +246,13 @@ contract AllowanceModule is SignatureDecoder {
+@@ -184,17 +269,42 @@ contract AllowanceModule is SignatureDecoder {
          checkSignature(delegate, signature, transferHashData, safe);
  
          if (payment > 0) {
@@ -204,7 +229,36 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..bec682edff5fe798e34f16a54e77e1fb
          }
          // Transfer token
          transfer(safe, token, to, amount);
-@@ -211,14 +275,12 @@ contract AllowanceModule is SignatureDecoder {
+         emit ExecuteAllowanceTransfer(address(safe), delegate, token, to, amount, allowance.nonce - 1);
+     }
+ 
++    /// @dev Allows to use the allowance to perform a transfer to multiple users.
++    /// @param safe The Safe whose funds should be used.
++    /// @param token Token contract address.
++    /// @param to Address that should receive the tokens.
++    /// @param amount Amount that should be transferred.
++    /// @param payment Amount to should be paid for executing the transfer.
++    /// @param delegate Delegate whose allowance should be updated.
++    /// @param signature Signature generated by the delegate to authorize the transfer.
++    function multipleExecuteAllowanceTransfer(
++        GnosisSafe[] memory safe,
++        address[] memory token,
++        address[] memory to,
++        uint96[] memory amount,
++        uint96[] memory payment,
++        address[] memory delegate,
++        bytes[] memory signature
++    ) public {
++        uint256 countToIterate = amount.length;
++        for (uint i=0; i<countToIterate; i++) {
++            executeAllowanceTransfer(safe[i], token[i], payable(to[i]), amount[i], payment[i], delegate[i], signature[i]);
++        }
++    }
++
+     /// @dev Returns the chain id used by this contract.
+     function getChainId() public pure returns (uint256) {
+         uint256 id;
+@@ -211,14 +321,12 @@ contract AllowanceModule is SignatureDecoder {
          address token,
          address to,
          uint96 amount,
@@ -220,7 +274,7 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..bec682edff5fe798e34f16a54e77e1fb
          );
          return abi.encodePacked(byte(0x19), byte(0x01), domainSeparator, transferHash);
      }
-@@ -229,19 +291,17 @@ contract AllowanceModule is SignatureDecoder {
+@@ -229,19 +337,17 @@ contract AllowanceModule is SignatureDecoder {
          address token,
          address to,
          uint96 amount,
@@ -242,7 +296,7 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..bec682edff5fe798e34f16a54e77e1fb
              "expectedDelegate == signer && delegates[address(safe)][uint48(signer)].delegate == signer"
          );
      }
-@@ -274,7 +334,7 @@ contract AllowanceModule is SignatureDecoder {
+@@ -274,7 +380,7 @@ contract AllowanceModule is SignatureDecoder {
      }
  
      function transfer(GnosisSafe safe, address token, address payable to, uint96 amount) private {
@@ -251,7 +305,7 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..bec682edff5fe798e34f16a54e77e1fb
              // solium-disable-next-line security/no-send
              require(safe.execTransactionFromModule(to, amount, "", Enum.Operation.Call), "Could not execute ether transfer");
          } else {
-@@ -317,6 +377,13 @@ contract AllowanceModule is SignatureDecoder {
+@@ -317,6 +423,13 @@ contract AllowanceModule is SignatureDecoder {
          emit AddDelegate(msg.sender, delegate);
      }
  
@@ -265,7 +319,7 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..bec682edff5fe798e34f16a54e77e1fb
      /// @dev Allows to remove a delegate.
      /// @param delegate Delegate that should be removed.
      /// @param removeAllowances Indicator if allowances should also be removed. This should be set to `true` unless this causes an out of gas, in this case the allowances should be "manually" deleted via `deleteAllowance`.
-@@ -367,4 +434,14 @@ contract AllowanceModule is SignatureDecoder {
+@@ -367,4 +480,14 @@ contract AllowanceModule is SignatureDecoder {
              mstore(results, i)
          }
      }

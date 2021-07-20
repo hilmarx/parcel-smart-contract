@@ -168,4 +168,86 @@ contract('AllowanceModule', function(accounts) {
         assert.equal(startResetTime + 24 * 60, allowance[3])
         assert.equal(4, allowance[4])
     })
+
+
+    it('multipleExecuteAllowance', async () => {
+        const token = await TestToken.new({from: accounts[0]})
+        await token.transfer(gnosisSafe.address, 1000, {from: accounts[0]}) 
+        //const mintToken = await TestCompound.new(sourceToken.address)
+
+        console.log(lw.accounts[5], lw.accounts[6], )
+        
+        let enableModuleData = await gnosisSafe.contract.methods.enableModule(safeModule.address).encodeABI()
+        await execTransaction(gnosisSafe.address, 0, enableModuleData, CALL, "enable module")
+        let modules = await gnosisSafe.getModules()
+        assert.equal(1, modules.length)
+        assert.equal(safeModule.address, modules[0])
+
+        let addDelegateData = await safeModule.contract.methods.addDelegate(lw.accounts[5]).encodeABI()
+        await execTransaction(safeModule.address, 0, addDelegateData, CALL, "add delegate")
+
+        let delegates = await safeModule.getDelegates(gnosisSafe.address, 0, 10)
+        assert.equal(1, delegates.results.length)
+        assert.equal(lw.accounts[5], delegates.results[0].toLowerCase())
+
+        let startTime = currentMinutes() - 30
+        let setAllowanceData = await safeModule.contract.methods.setAllowance(lw.accounts[5], token.address, 100, 0, 0, 0, 0).encodeABI()
+        await execTransaction(safeModule.address, 0, setAllowanceData, CALL, "set allowance")
+
+        let tokens = await safeModule.getTokens(gnosisSafe.address, lw.accounts[5])
+        assert.equal(1, tokens.length)
+        assert.equal(token.address, tokens[0])
+        let allowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[5], token.address)
+
+        let nonce = allowance[4]
+        let transferHash = await safeModule.generateTransferHash(
+            gnosisSafe.address, token.address, accounts[1], 50, nonce
+        )
+        let signature = utils.signTransaction(lw, [lw.accounts[5]], transferHash)
+
+        // utils.logGasUsage(
+        //     'executeAllowanceTransfer',
+        //     await safeModule.executeAllowanceTransfer(
+        //         gnosisSafe.address, token.address, accounts[1], 60, 0, lw.accounts[5], signature
+        //     )
+        // )
+
+        let addDelegateData2 = await safeModule.contract.methods.addDelegate(lw.accounts[6]).encodeABI()
+        await execTransaction(safeModule.address, 0, addDelegateData2, CALL, "add delegate")
+
+        let delegates2 = await safeModule.getDelegates(gnosisSafe.address, 0, 10)
+        assert.equal(2, delegates2.results.length)
+        assert.equal(lw.accounts[6], delegates2.results[0].toLowerCase())
+
+        let setAllowanceData2 = await safeModule.contract.methods.setAllowance(lw.accounts[6], token.address, 100, 0, 0, 0, 0).encodeABI()
+        await execTransaction(safeModule.address, 0, setAllowanceData2, CALL, "set allowance")
+
+        let allowance2 = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[6], token.address)
+
+        let nonce2 = allowance2[4]
+        let transferHash2 = await safeModule.generateTransferHash(
+            gnosisSafe.address, token.address, accounts[1], 50, nonce2
+        )
+        let signature2 = utils.signTransaction(lw, [lw.accounts[6]], transferHash2)
+
+        // utils.logGasUsage(
+        //     'executeAllowanceTransfer',
+        //     await safeModule.executeAllowanceTransfer(
+        //         gnosisSafe.address, token.address, accounts[1], 60, 0, lw.accounts[6], signature2
+        //     )
+        // )
+        
+        utils.logGasUsage(
+            'multipleExecuteAllowanceTransfer',
+            await safeModule.multipleExecuteAllowanceTransfer(
+                [gnosisSafe.address, gnosisSafe.address], 
+                [token.address, token.address], 
+                [accounts[1], accounts[1]], 
+                [50, 50],
+                [0, 0], 
+                [lw.accounts[5], lw.accounts[6]], 
+                [signature, signature2]
+            )
+        )
+    })
 })
