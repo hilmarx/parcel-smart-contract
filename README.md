@@ -32,3 +32,15 @@
 8). Multiple Execute AllowanceTransfer
 - `multiExecuteAllowanceTransfer` is function in a contract that wraps `executeAllowanceTransfer` in a for loop. It is like Batch Call of `executeAllowanceTransfer` which is call by `gelato`. 
 - In this function there is one params called bytes[] which is not possible without `pragma experimental ABIEncoderV2;`. So added in Line.No: 2.
+
+## Start Ganache-cli for mainnet fork in terminal1
+
+ganache-cli --fork https://mainnet.infura.io/v3/--Infura-Key-- \
+ --unlock 0xB045FA6893B26807298E93377Cbb92d7f37B19eB
+
+`0xB045FA6893B26807298E93377Cbb92d7f37B19eB: <- this address id of UNI rich holder address to impersonate`
+
+## Running and Compiling tests in different terminal2
+
+truffle compile
+truffle test
