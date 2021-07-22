@@ -25,15 +25,18 @@ contract('Check Get Token Quantity', function(accounts) {
         safeModule = await AllowanceModule.new(lw.accounts[0])   
     })
 
-
     it('Get Token Quantity for ETH', async () => {
         // Price for almost 99.90 eth
         let ETH_Decimal = 18
-        let ETH_Address = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' // MATICETH token
-        let ETH_Oracle = '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419' // MATICETH Chainlink Mainnet Oracle for MATICETH->USD
+        let ETH_Address = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' // ETH token
+        let ETH_Oracle = '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419' // ETH Chainlink Mainnet Oracle for ETH->USD
         let pricefeedDetails = await safeModule.contract.methods.getLatestPrice(ETH_Oracle).call() 
         const fiatAmount = BigNumber.from(pricefeedDetails[0]).div(BigNumber.from(10).pow(BigNumber.from(pricefeedDetails[1]).sub(2)))
         let tokenQuantityWithDecimal = await safeModule.contract.methods.getTokenQuantity(fiatAmount.toString(), ETH_Address, ETH_Oracle).call()
+        
+        console.log('tokenQuantityWithDecimal: ', 
+            pricefeedDetails[0], pricefeedDetails[1], fiatAmount.toString(), tokenQuantityWithDecimal.toString())
+
         let tokenQuantityWithoutDecimal = BigNumber.from(tokenQuantityWithDecimal).div(BigNumber.from(10).pow(ETH_Decimal))
         console.log('ETH: ', pricefeedDetails[0], pricefeedDetails[1], tokenQuantityWithoutDecimal.toString(), 
             tokenQuantityWithDecimal.toString(), pricefeedDetails[0].toString(), fiatAmount.toString());
@@ -50,7 +53,7 @@ contract('Check Get Token Quantity', function(accounts) {
         let tokenQuantityWithoutDecimal = BigNumber.from(tokenQuantityWithDecimal).div(BigNumber.from(10).pow(MATIC_Decimal))
         console.log('MATIC: ', pricefeedDetails[0], pricefeedDetails[1], tokenQuantityWithoutDecimal.toString(), 
             tokenQuantityWithDecimal.toString(), pricefeedDetails[0].toString(), fiatAmount.toString());
-        assert.equal(98, tokenQuantityWithoutDecimal)
+        assert.equal(99, tokenQuantityWithoutDecimal)
     })
 
     it('Get Token Quantity for UNI', async () => {
@@ -76,6 +79,6 @@ contract('Check Get Token Quantity', function(accounts) {
         let tokenQuantityWithoutDecimal = BigNumber.from(tokenQuantityWithDecimal).div(BigNumber.from(10).pow(ZRX_Decimal))
         console.log('ZRX: ', pricefeedDetails[0], pricefeedDetails[1], tokenQuantityWithoutDecimal.toString(), 
             tokenQuantityWithDecimal.toString(), pricefeedDetails[0].toString(), fiatAmount.toString());
-        assert.equal(98, tokenQuantityWithoutDecimal)
+        assert.equal(99, tokenQuantityWithoutDecimal)
     })
 })

@@ -5,7 +5,7 @@ pragma experimental ABIEncoderV2;
 import "./Enum.sol";
 import "./SignatureDecoder.sol";
 import "./interfaces/AggregatorV3Interface.sol";
-import "./lib/FixidityLib.sol";
+import "./lib/DSMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
@@ -27,7 +27,7 @@ interface GnosisSafe {
         returns (bool success);
 }
 
-contract AllowanceModule is SignatureDecoder, Ownable {
+contract AllowanceModule is SignatureDecoder, Ownable, DSMath {
 
     string public constant NAME = "Allowance Module";
     string public constant VERSION = "0.1.0";
@@ -151,33 +151,12 @@ contract AllowanceModule is SignatureDecoder, Ownable {
     {
         // Call Chainlink to fetch price and priceDecimals
         (int tokenPrice, uint256 priceDecimals) = getLatestPrice(_oracle);
-
         uint256 tokenDecimals = IERC20Decimal(token).decimals();
-        tokenPrice = tokenPrice * int256(10 ** tokenDecimals);
-        
-        // if price is less than priceDecimals then call this to avoid ZERO
-        if(tokenPrice < int(10 ** priceDecimals)) {
-            uint remaind;
-            if (priceDecimals > (2 * tokenDecimals)) {
-                remaind = priceDecimals - (2 * tokenDecimals); 
-                remaind = priceDecimals - remaind;
-            } else {
-                remaind = 18;
-            }
-            
-            tokenPrice = int256(uint256(tokenPrice) * (10 ** remaind) / (10 ** priceDecimals));
-            tokenQuantity = uint96(
-                    uint256(FixidityLib.newFixedFraction(fiatAmount, tokenPrice))
-                    * (10 ** tokenDecimals)
-                );
 
-        } else {
-            tokenPrice = int256(uint256(tokenPrice) / (10 ** priceDecimals));
-            tokenQuantity = uint96(
-                    uint256(FixidityLib.newFixedFraction(fiatAmount, tokenPrice)) * 
-                    (10 ** (2 * tokenDecimals))
-                    / (10 ** 24)
-                );
+        fiatAmount = fiatAmount * int256(10 ** priceDecimals);
+        tokenQuantity = uint96(wdiv(uint(fiatAmount), uint(tokenPrice)));
+        if (tokenDecimals != 18) {
+            tokenQuantity = uint96(tokenQuantity * (10 ** tokenDecimals) / (10 ** 18));
         }
     }
 
