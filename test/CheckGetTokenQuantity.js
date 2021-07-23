@@ -33,14 +33,14 @@ contract('Check Get Token Quantity', function(accounts) {
         let pricefeedDetails = await safeModule.contract.methods.getLatestPrice(ETH_Oracle).call() 
         const fiatAmount = BigNumber.from(pricefeedDetails[0]).div(BigNumber.from(10).pow(BigNumber.from(pricefeedDetails[1]).sub(2)))
         let tokenQuantityWithDecimal = await safeModule.contract.methods.getTokenQuantity(fiatAmount.toString(), ETH_Address, ETH_Oracle).call()
-        
         console.log('tokenQuantityWithDecimal: ', 
             pricefeedDetails[0], pricefeedDetails[1], fiatAmount.toString(), tokenQuantityWithDecimal.toString())
-
         let tokenQuantityWithoutDecimal = BigNumber.from(tokenQuantityWithDecimal).div(BigNumber.from(10).pow(ETH_Decimal))
         console.log('ETH: ', pricefeedDetails[0], pricefeedDetails[1], tokenQuantityWithoutDecimal.toString(), 
             tokenQuantityWithDecimal.toString(), pricefeedDetails[0].toString(), fiatAmount.toString());
-        assert.equal(99, tokenQuantityWithoutDecimal)
+        // assert.equal(99, tokenQuantityWithoutDecimal)
+        assert.isAbove(tokenQuantityWithoutDecimal.toNumber(), 95, 'tokenQuantityWithoutDecimal is strictly greater than 95');
+        assert.isBelow(tokenQuantityWithoutDecimal.toNumber(), 101, 'tokenQuantityWithoutDecimal is strictly less than 100');
     })
 
     it('Get Token Quantity for MATIC', async () => {
@@ -53,7 +53,9 @@ contract('Check Get Token Quantity', function(accounts) {
         let tokenQuantityWithoutDecimal = BigNumber.from(tokenQuantityWithDecimal).div(BigNumber.from(10).pow(MATIC_Decimal))
         console.log('MATIC: ', pricefeedDetails[0], pricefeedDetails[1], tokenQuantityWithoutDecimal.toString(), 
             tokenQuantityWithDecimal.toString(), pricefeedDetails[0].toString(), fiatAmount.toString());
-        assert.equal(99, tokenQuantityWithoutDecimal)
+        // assert.equal(99, tokenQuantityWithoutDecimal)
+        assert.isAbove(tokenQuantityWithoutDecimal.toNumber(), 95, 'tokenQuantityWithoutDecimal is strictly greater than 95');
+        assert.isBelow(tokenQuantityWithoutDecimal.toNumber(), 101, 'tokenQuantityWithoutDecimal is strictly less than 100');
     })
 
     it('Get Token Quantity for UNI', async () => {
@@ -66,7 +68,9 @@ contract('Check Get Token Quantity', function(accounts) {
         let tokenQuantityWithoutDecimal = BigNumber.from(tokenQuantityWithDecimal).div(BigNumber.from(10).pow(Uni_Decimal))
         console.log('UNI: ', pricefeedDetails[0], pricefeedDetails[1], tokenQuantityWithoutDecimal.toString(), 
             tokenQuantityWithDecimal.toString(), fiatAmount.toString());
-        assert.equal(99, tokenQuantityWithoutDecimal)
+        // assert.equal(99, tokenQuantityWithoutDecimal)
+        assert.isAbove(tokenQuantityWithoutDecimal.toNumber(), 95, 'tokenQuantityWithoutDecimal is strictly greater than 95');
+        assert.isBelow(tokenQuantityWithoutDecimal.toNumber(), 101, 'tokenQuantityWithoutDecimal is strictly less than 100');
     })
 
     it('Get Token Quantity for ZRX', async () => {
@@ -79,6 +83,7 @@ contract('Check Get Token Quantity', function(accounts) {
         let tokenQuantityWithoutDecimal = BigNumber.from(tokenQuantityWithDecimal).div(BigNumber.from(10).pow(ZRX_Decimal))
         console.log('ZRX: ', pricefeedDetails[0], pricefeedDetails[1], tokenQuantityWithoutDecimal.toString(), 
             tokenQuantityWithDecimal.toString(), pricefeedDetails[0].toString(), fiatAmount.toString());
-        assert.equal(99, tokenQuantityWithoutDecimal)
+        assert.isAbove(tokenQuantityWithoutDecimal.toNumber(), 95, 'tokenQuantityWithoutDecimal is strictly greater than 95');
+        assert.isBelow(tokenQuantityWithoutDecimal.toNumber(), 101, 'tokenQuantityWithoutDecimal is strictly less than 100');
     })
 })

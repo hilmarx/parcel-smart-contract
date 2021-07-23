@@ -359,7 +359,8 @@ contract AllowanceModule is SignatureDecoder, Ownable, DSMath {
     }
 
     function transfer(GnosisSafe safe, address token, address payable to, uint96 amount) private {
-        if (token == address(0) || token == ETH) {
+        // if (token == address(0) || token == ETH) {
+        if (token == ETH) {
             // solium-disable-next-line security/no-send
             require(safe.execTransactionFromModule(to, amount, "", Enum.Operation.Call), "Could not execute ether transfer");
         } else {
