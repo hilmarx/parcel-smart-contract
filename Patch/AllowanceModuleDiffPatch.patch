@@ -1,5 +1,5 @@
 diff --git a/allowances/contracts/AlowanceModule.sol b/allowances/contracts/AlowanceModule.sol
-index be7dfe1385f91499f1842fb38093487d6b541c98..181372da89f67311ac8c650b384d7965b4056d73 100644
+index be7dfe1385f91499f1842fb38093487d6b541c98..8d559ab2474f302e9c91b5ae7766f2836afa6556 100644
 --- a/allowances/contracts/AlowanceModule.sol
 +++ b/allowances/contracts/AlowanceModule.sol
 @@ -1,8 +1,20 @@
@@ -77,9 +77,9 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..181372da89f67311ac8c650b384d7965
 +    event AddTokenOracle(address indexed token, address indexed oracle);
 +    event SetGelatoAddress(address indexed gelato);
 +
-+    // constructor(address payable _gelato) {
-+    //     GELATO = _gelato;
-+    // }
++    constructor(address payable _gelato) {
++        GELATO = _gelato;
++    }
  
      /// @dev Allows to update the allowance for a specified token. This can only be done via a Safe transaction.
      /// @param delegate Delegate whose allowance should be updated.
@@ -275,16 +275,17 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..181372da89f67311ac8c650b384d7965
              "expectedDelegate == signer && delegates[address(safe)][uint48(signer)].delegate == signer"
          );
      }
-@@ -274,7 +359,7 @@ contract AllowanceModule is SignatureDecoder {
+@@ -274,7 +359,8 @@ contract AllowanceModule is SignatureDecoder {
      }
  
      function transfer(GnosisSafe safe, address token, address payable to, uint96 amount) private {
 -        if (token == address(0)) {
-+        if (token == address(0) || token == ETH) {
++        // if (token == address(0) || token == ETH) {
++        if (token == ETH) {
              // solium-disable-next-line security/no-send
              require(safe.execTransactionFromModule(to, amount, "", Enum.Operation.Call), "Could not execute ether transfer");
          } else {
-@@ -317,6 +402,13 @@ contract AllowanceModule is SignatureDecoder {
+@@ -317,6 +403,13 @@ contract AllowanceModule is SignatureDecoder {
          emit AddDelegate(msg.sender, delegate);
      }
  
@@ -298,7 +299,7 @@ index be7dfe1385f91499f1842fb38093487d6b541c98..181372da89f67311ac8c650b384d7965
      /// @dev Allows to remove a delegate.
      /// @param delegate Delegate that should be removed.
      /// @param removeAllowances Indicator if allowances should also be removed. This should be set to `true` unless this causes an out of gas, in this case the allowances should be "manually" deleted via `deleteAllowance`.
-@@ -367,4 +459,14 @@ contract AllowanceModule is SignatureDecoder {
+@@ -367,4 +460,14 @@ contract AllowanceModule is SignatureDecoder {
              mstore(results, i)
          }
      }
