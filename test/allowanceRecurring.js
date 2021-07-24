@@ -1,6 +1,9 @@
 const utils = require('@gnosis.pm/safe-contracts/test/utils/general')
 const { wait, waitUntilBlock } = require('./utils')(web3);
 
+const {expect} = require('chai')
+const truffleAssert = require('truffle-assertions');
+
 const truffleContract = require("@truffle/contract")
 
 const GnosisSafeBuildInfo = require("@gnosis.pm/safe-contracts/build/contracts/GnosisSafe.json")
@@ -230,13 +233,19 @@ contract('AllowanceModule', function(accounts) {
         )
         let signature2 = utils.signTransaction(lw, [lw.accounts[6]], transferHash2)
 
-        // utils.logGasUsage(
-        //     'executeAllowanceTransfer',
-        //     await safeModule.executeAllowanceTransfer(
-        //         gnosisSafe.address, token.address, accounts[1], 60, 0, lw.accounts[6], signature2
-        //     )
-        // )
-        
+        await truffleAssert.reverts(
+            safeModule.multipleExecuteAllowanceTransfer(
+                [gnosisSafe.address, gnosisSafe.address], 
+                [token.address, token.address], 
+                [accounts[1], accounts[1]], 
+                [50, 50],
+                [0], 
+                [lw.accounts[5], lw.accounts[6]], 
+                [signature, signature2]
+            ), 
+            "Array length mismatch"
+        );
+
         utils.logGasUsage(
             'multipleExecuteAllowanceTransfer',
             await safeModule.multipleExecuteAllowanceTransfer(

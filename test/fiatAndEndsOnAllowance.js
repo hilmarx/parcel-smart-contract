@@ -93,8 +93,7 @@ contract('Fiat and EndsOn', function(accounts) {
         await execTransaction(safeModule.address, 0, setAllowanceData, CALL, "set allowance")
         let allowance = await safeModule.contract.methods.getTokenAllowance(gnosisSafe.address, lw.accounts[4], token.address).call()
         console.log('allowance[0]: ', allowance[0])
-
-        // assert.equal(web3.utils.toWei('100.0', 'ether'), allowance[0])
+        assert.equal(1600, allowance[0])
         // let amtt = await safeModule.contract.methods.getTokenQuantity('16', tokenAddress, UNI_Oracle).call()
         // console.log('amtt: ', amtt[0], amtt.toString());
     })
