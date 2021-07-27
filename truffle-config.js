@@ -2,6 +2,7 @@ const HDWalletProvider = require('@truffle/hdwallet-provider')
 require('dotenv').config()
 const package = require('./package')
 const mnemonic = process.env.MNEMONIC
+const matic_mnemonic = process.env.MATIC_MNEMONIC
 const token = process.env.INFURA_TOKEN
 
 module.exports = {
@@ -59,14 +60,30 @@ module.exports = {
       },
       network_id: '246',
       gasPrice: 1
-    }
+    },
+    maticMainnet: {
+      provider: () => { 
+        return new HDWalletProvider(matic_mnemonic, 'https://rpc-mainnet.maticvigil.com')
+      },
+      network_id: '137',
+    },
+    maticTestnet: {
+      provider: () => { 
+        return new HDWalletProvider(mnemonic, `https://rpc-mumbai.matic.today`)
+      },
+      network_id: '80001',
+      confirmations: 2,
+      timeoutBlocks: 200,
+      skipDryRun: true
+    },
   },
   compilers: {
     solc: {
       version: package.dependencies.solc,
       settings: {
         optimizer: {
-          enabled: false
+          enabled: true,
+          runs: 999999
         }
       }
     }
