@@ -79,8 +79,8 @@ contract AllowanceModule is SignatureDecoder, Ownable, DSMath {
     }
 
     int8 public immutable notEndsOn = -1;
-    uint256 public gasCost = 1**6;
-    uint256 public one_ether = 1**18;
+    uint256 public gasCost = 10**6;
+    uint256 public one_ether = 10**18;
     uint256 public priceTimeThresold = 4 hours;
 
     event AddDelegate(address indexed safe, address delegate);
