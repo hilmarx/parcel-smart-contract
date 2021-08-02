@@ -13,6 +13,7 @@ GnosisSafeProxy.setProvider(web3.currentProvider)
 const AllowanceModule = artifacts.require("./AllowanceModule.sol")
 const TestToken = artifacts.require("./TestToken.sol")
 const IERC20 = artifacts.require('IERC20')
+const {BigNumber} = require('@ethersproject/bignumber')
 
 contract('Fiat and EndsOn', function(accounts) {
     
@@ -74,12 +75,12 @@ contract('Fiat and EndsOn', function(accounts) {
         assert.equal(1, modules.length)
         assert.equal(safeModule.address,  modules[0])
 
-        await safeModule.contract.methods.addTokenOracle(
-            tokenAddress, UNI_Oracle
-        ).send({from: accounts[0]})
+        // await safeModule.contract.methods.addTokenOracle(
+        //     tokenAddress, UNI_Oracle
+        // ).send({from: accounts[0]})
 
-        const oracle = await safeModule.contract.methods.tokenToOracle(tokenAddress).call()
-        console.log('oracle: ', oracle.toString())
+        // const oracle = await safeModule.contract.methods.tokenToOracle(tokenAddress).call()
+        // console.log('oracle: ', oracle.toString())
 
         let addDelegateData = await safeModule.contract.methods.addDelegate(lw.accounts[4]).encodeABI()
         await execTransaction(safeModule.address, 0, addDelegateData, CALL, "add delegate")
@@ -92,10 +93,16 @@ contract('Fiat and EndsOn', function(accounts) {
         let setAllowanceData = await safeModule.contract.methods.setAllowance(lw.accounts[4], token.address, 0, 1600, 0, 0, 0).encodeABI()
         await execTransaction(safeModule.address, 0, setAllowanceData, CALL, "set allowance")
         let allowance = await safeModule.contract.methods.getTokenAllowance(gnosisSafe.address, lw.accounts[4], token.address).call()
-        console.log('allowance[0]: ', allowance[0])
-        assert.equal(1600, allowance[0])
-        // let amtt = await safeModule.contract.methods.getTokenQuantity('16', tokenAddress, UNI_Oracle).call()
-        // console.log('amtt: ', amtt[0], amtt.toString());
+
+        let UNI_Address = '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984' // Uni token
+        let tokenQuantityWithDecimal = await safeModule.contract.methods.getTokenQuantity(
+            '1600',
+            UNI_Address
+        ).call()
+        console.log('allowance[0]: ', allowance[0], tokenQuantityWithDecimal.toString())
+        assert.isAbove(BigNumber.from(allowance[0]).toNumber(), 70, 'allowance[0] is strictly greater than 70');
+        assert.isBelow(BigNumber.from(allowance[0]).toNumber(), 75, 'allowance[0] is strictly less than 75');
+    
     })
 
     it('Execute ether allowance with endsOn. AFter 3 times recurring should stop.', async () => {
@@ -177,6 +184,7 @@ contract('Fiat and EndsOn', function(accounts) {
             ),
             'executeAllowanceTransfer'
         )
+
 
         assert.equal(await web3.eth.getBalance(gnosisSafe.address), web3.utils.toWei("0.997", 'ether'))
         assert.equal(await web3.eth.getBalance(lw.accounts[0]), web3.utils.toWei("0.003", 'ether'))

@@ -172,7 +172,6 @@ contract('AllowanceModule', function(accounts) {
         assert.equal(4, allowance[4])
     })
 
-
     it('multipleExecuteAllowance', async () => {
         const token = await TestToken.new({from: accounts[0]})
         await token.transfer(gnosisSafe.address, 1000, {from: accounts[0]}) 
@@ -235,7 +234,7 @@ contract('AllowanceModule', function(accounts) {
 
         await truffleAssert.reverts(
             safeModule.multipleExecuteAllowanceTransfer(
-                [gnosisSafe.address, gnosisSafe.address], 
+                gnosisSafe.address, 
                 [token.address, token.address], 
                 [accounts[1], accounts[1]], 
                 [50, 50],
@@ -249,7 +248,7 @@ contract('AllowanceModule', function(accounts) {
         utils.logGasUsage(
             'multipleExecuteAllowanceTransfer',
             await safeModule.multipleExecuteAllowanceTransfer(
-                [gnosisSafe.address, gnosisSafe.address], 
+                gnosisSafe.address, 
                 [token.address, token.address], 
                 [accounts[1], accounts[1]], 
                 [50, 50],

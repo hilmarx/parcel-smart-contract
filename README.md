@@ -44,3 +44,8 @@ ganache-cli --fork https://mainnet.infura.io/v3/--Infura-Key-- \
 
 truffle compile
 truffle test
+
+## Deploy
+
+### Polygon deploy
+truffle deploy --network maticMainnet

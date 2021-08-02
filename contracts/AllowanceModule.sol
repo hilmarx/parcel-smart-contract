@@ -4,7 +4,7 @@ pragma experimental ABIEncoderV2;
 
 import "./Enum.sol";
 import "./SignatureDecoder.sol";
-import "./interfaces/AggregatorV3Interface.sol";
+import "./interfaces/FeedRegistryInterface.sol";
 import "./lib/DSMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -33,8 +33,11 @@ contract AllowanceModule is SignatureDecoder, Ownable, DSMath {
     string public constant VERSION = "0.1.0";
 
     // solhint-disable-next-line var-name-mixedcase
+    FeedRegistryInterface internal registry;
     address payable public GELATO;
     address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+    address public DenominationsUSD = 0x0000000000000000000000000000000000000348;
+    address public Chainlink_Registery = 0x47Fb2585D2C56Fe188D0E6ec628a38b74fCeeeDf;
 
     bytes32 public constant DOMAIN_SEPARATOR_TYPEHASH = 0x47e79534a245952e8b16893a336b85a3d9ea9fa8c573f3d803afb92a79469218;
     // keccak256(
@@ -56,8 +59,6 @@ contract AllowanceModule is SignatureDecoder, Ownable, DSMath {
     mapping(address => uint48) public delegatesStart;
     // Safe -> Delegates double linked list
     mapping(address => mapping (uint48 => Delegate)) public delegates;
-    // token -> chainlinkOracle
-    mapping(address => address) public tokenToOracle;
 
     // We use a double linked list for the delegates. The id is the first 6 bytes. 
     // To double check the address in case of collision, the address is part of the struct.
@@ -81,7 +82,8 @@ contract AllowanceModule is SignatureDecoder, Ownable, DSMath {
     int8 public immutable notEndsOn = -1;
     uint256 public gasCost = 10**6;
     uint256 public one_ether = 10**18;
-    uint256 public priceTimeThresold = 4 hours;
+    uint256 public priceTimeThresold = 2 days;
+    uint96 public totalGasPayment;
 
     event AddDelegate(address indexed safe, address delegate);
     event RemoveDelegate(address indexed safe, address delegate);
@@ -91,13 +93,17 @@ contract AllowanceModule is SignatureDecoder, Ownable, DSMath {
     event ResetAllowance(address indexed safe, address delegate, address token);
     event DeleteAllowance(address indexed safe, address delegate, address token);
     event NewMaxGasPrice(address indexed safe, uint256 newMaxGasPrice);
-    event AddTokenOracle(address indexed token, address indexed oracle);
-    event SetGelatoAddress(address indexed gelato);
-    event SetGasCost(uint256 gasCost);
-    event SetPriceThresold(uint256 priceTimeThresold);
+    event SetRegistery(address indexed oldRegistery, address indexed newRegistery);
+    event SetGelatoAddress(address indexed oldGelato, address indexed newGelato);
+    event SetGasCost(uint256 oldGasCost, uint256 newGasCost);
+    event SetPriceThresold(uint256 oldPriceTimeThresold, uint256 newPriceTimeThresold);
+    event IndividualSuccess(address indexed safe, address delegate, address token, address to, uint96 value);
+    event IndividualFailed(address indexed safe, address delegate, address token, address to, uint96 value);
+    event SetDenominationsUSD(address indexed oldDenominationsUSD, address indexed newDenominationsUSD);
 
     constructor(address payable _gelato) {
         GELATO = _gelato;
+        registry = FeedRegistryInterface(Chainlink_Registery);
     }
 
     /// @dev Allows to update the allowance for a specified token. This can only be done via a Safe transaction.
@@ -115,6 +121,7 @@ contract AllowanceModule is SignatureDecoder, Ownable, DSMath {
     {
         require(delegate != address(0), "delegate != address(0)");
         require(delegates[msg.sender][uint48(delegate)].delegate == delegate, "delegates[msg.sender][uint48(delegate)].delegate == delegate");
+        require((tokenAmount != 0 || fiatAmount != 0) && (tokenAmount == 0 || fiatAmount == 0), "One should zero and one non-zero");
         Allowance memory allowance = getAllowance(msg.sender, delegate, token);
         if (allowance.nonce == 0) { // New token
             // Nonce should never be 0 once allowance has been activated
@@ -131,42 +138,34 @@ contract AllowanceModule is SignatureDecoder, Ownable, DSMath {
             allowance.lastResetMin = currentMin;
         }
         allowance.resetTimeMin = resetTimeMin;
-
-        if (tokenAmount > 0) {
-            allowance.tokenAmount = tokenAmount;
-        } else {
-            allowance.fiatAmount = fiatAmount;
-        }
-
-        if (endsOn > 0) {
-            allowance.endsOn = endsOn;
-        } else {
-            allowance.endsOn = notEndsOn;
-        }
+        allowance.tokenAmount = tokenAmount;
+        allowance.fiatAmount = fiatAmount;
+        allowance.endsOn = endsOn > 0 ? endsOn : notEndsOn;
 
         updateAllowance(msg.sender, delegate, token, allowance);
         emit SetAllowance(msg.sender, delegate, token, tokenAmount, fiatAmount, resetTimeMin);
     }
 
     // calculate token quantity from fiat amount
-    function getTokenQuantity(uint256 fiatAmount, address token, address _oracle)
+    function getTokenQuantity(uint256 fiatAmount, address token)
         public view returns(uint96 tokenQuantity)
     {
-        // Call Chainlink to fetch price and priceDecimals
-        (int tokenPrice, uint256 priceDecimals) = getLatestPrice(_oracle);
-        uint256 tokenDecimals = IERC20Decimal(token).decimals();
-        uint256 totalFiatAmountInDec = fiatAmount * (10 ** priceDecimals);
-        tokenQuantity = uint96(wdiv(totalFiatAmountInDec, uint(tokenPrice)));
+        // Call Chainlink registery to fetch price and priceDecimals
+        (int tokenPrice, uint256 priceDecimals) = getLatestPrice(token);
+        uint256 tokenDecimals = token == ETH ? 18 : IERC20Decimal(token).decimals();
+        uint256 diffDecimal = 18 - priceDecimals;
+        tokenPrice = tokenPrice * int256(10 ** diffDecimal);
+        tokenQuantity = uint96(wdiv(fiatAmount, uint(tokenPrice)));
         if (tokenDecimals != 18) {
             tokenQuantity = uint96(tokenQuantity * (10 ** tokenDecimals) / (one_ether));
         }
     }
 
     // chainlink price integration
-    function getLatestPrice(address _oracle) public view returns (int, uint8) {
-        (,int price,,uint timeStamp,) = AggregatorV3Interface(_oracle).latestRoundData();
+    function getLatestPrice(address _token) public view returns (int, uint8) {
+        (,int price,,uint timeStamp,) = registry.latestRoundData(_token, DenominationsUSD);
         require(price > 0, "Prize should not be negative.");
-        uint8 decimals = AggregatorV3Interface(_oracle).decimals();
+        uint8 decimals = registry.decimals(_token, DenominationsUSD);
         uint256 timeDiff = block.timestamp - timeStamp;
         require(timeDiff < priceTimeThresold, "Timestamp is old");
         return (price, decimals);
@@ -211,6 +210,7 @@ contract AllowanceModule is SignatureDecoder, Ownable, DSMath {
         allowance.spent = 0;
         allowance.resetTimeMin = 0;
         allowance.lastResetMin = 0;
+        allowance.endsOn = 0;
         updateAllowance(msg.sender, delegate, token, allowance);
         emit DeleteAllowance(msg.sender, delegate, token);
     }
@@ -231,7 +231,62 @@ contract AllowanceModule is SignatureDecoder, Ownable, DSMath {
         uint96 payment,
         address delegate,
         bytes memory signature
+    ) public returns(uint256 tokenQuantity){
+        tokenQuantity = executeAllowanceTransferInternal(safe, token, to, amount, payment, delegate, signature);
+        gasPayment(safe);
+    }
+
+        /// @dev Allows to use the allowance to perform a transfer to multiple users.
+    /// @param safe The Safe whose funds should be used.
+    /// @param token Token contract address.
+    /// @param to Address that should receive the tokens.
+    /// @param amount Amount that should be transferred.
+    /// @param payment Amount to should be paid for executing the transfer.
+    /// @param delegate Delegate whose allowance should be updated.
+    /// @param signature Signature generated by the delegate to authorize the transfer.
+    function multipleExecuteAllowanceTransfer(
+        GnosisSafe safe,
+        address[] memory token,
+        address[] memory to,
+        uint96[] memory amount,
+        uint96[] memory payment,
+        address[] memory delegate,
+        bytes[] memory signature
     ) public {
+        require(address(safe) != address(0), "Safe Address should not be zero");
+        require(amount.length == token.length 
+            && amount.length == to.length && amount.length == payment.length 
+            && amount.length == delegate.length && amount.length == signature.length, "Array length mismatch");
+        for (uint i = 0; i < amount.length; i++) {
+            bytes4 selector = this.executeAllowanceTransferInternal.selector;
+            bytes memory data = abi.encodeWithSelector(selector, safe, token[i], payable(to[i]), amount[i], payment[i], delegate[i], signature[i]);
+            (bool success, bytes memory returnedData) = address(this).call(data);
+            if (success) {
+                emit IndividualSuccess(address(safe), delegate[i], token[i], to[i], abi.decode(returnedData, (uint96)));
+            } else {
+                emit IndividualFailed(address(safe), delegate[i], token[i], to[i], 0);
+            }
+        }
+        gasPayment(safe);
+    }
+
+    /// @dev Allows to use the allowance to perform a transfer.
+    /// @param safe The Safe whose funds should be used.
+    /// @param token Token contract address.
+    /// @param to Address that should receive the tokens.
+    /// @param amount Amount that should be transferred.
+    /// @param payment Amount to should be paid for executing the transfer.
+    /// @param delegate Delegate whose allowance should be updated.
+    /// @param signature Signature generated by the delegate to authorize the transfer.
+    function executeAllowanceTransferInternal(
+        GnosisSafe safe,
+        address token,
+        address payable to,
+        uint96 amount,
+        uint96 payment,
+        address delegate,
+        bytes memory signature
+    ) public returns(uint256){
         // Get current state
         Allowance memory allowance = getAllowance(address(safe), delegate, token);
 
@@ -244,8 +299,8 @@ contract AllowanceModule is SignatureDecoder, Ownable, DSMath {
         uint96 newSpent = allowance.spent + amount;
         if (allowance.fiatAmount > 0) {
             // Calculate TokenQunatity from fiatAmount(amount)
-            require(tokenToOracle[token] != address(0), "Oracle not specified for this token");
-            uint96 tokenQuantity = getTokenQuantity(amount, token, tokenToOracle[token]);
+            require(token != address(0), "Oracle not specified for this token");
+            uint96 tokenQuantity = getTokenQuantity(amount, token);
             require(tokenQuantity != 0, "Token Quantity Can't be Zero");
 
             // Check new spent fiatAmount and overflow
@@ -270,40 +325,24 @@ contract AllowanceModule is SignatureDecoder, Ownable, DSMath {
         if (payment > 0 && msg.sender == GELATO) {
             require(tx.gasprice <= maxGasPrice[address(safe)], "tx.gasprice is > maxGas price");
             require(payment <= maxGasPrice[address(safe)] * gasCost, "Gas fees > allowed"); // deterministic gas calculation
-            // Transfer payment
-            // solium-disable-next-line security/no-tx-origin
-            transfer(safe, ETH, GELATO, payment);
+            totalGasPayment = totalGasPayment + payment;
             // solium-disable-next-line security/no-tx-origin
             emit PayAllowanceTransfer(address(safe), delegate, ETH, tx.origin, payment);
         }
+
         // Transfer token
         transfer(safe, token, to, tokenQuantity);
         emit ExecuteAllowanceTransfer(address(safe), delegate, token, to, tokenQuantity, allowance.nonce - 1);
+        return tokenQuantity;
     }
 
-    /// @dev Allows to use the allowance to perform a transfer to multiple users.
-    /// @param safe The Safe whose funds should be used.
-    /// @param token Token contract address.
-    /// @param to Address that should receive the tokens.
-    /// @param amount Amount that should be transferred.
-    /// @param payment Amount to should be paid for executing the transfer.
-    /// @param delegate Delegate whose allowance should be updated.
-    /// @param signature Signature generated by the delegate to authorize the transfer.
-    function multipleExecuteAllowanceTransfer(
-        GnosisSafe[] memory safe,
-        address[] memory token,
-        address[] memory to,
-        uint96[] memory amount,
-        uint96[] memory payment,
-        address[] memory delegate,
-        bytes[] memory signature
-    ) public {
-        require(amount.length == safe.length && amount.length == token.length 
-            && amount.length == to.length && amount.length == payment.length 
-            && amount.length == delegate.length && amount.length == signature.length, "Array length mismatch");
-        uint256 countToIterate = amount.length;
-        for (uint i=0; i<countToIterate; i++) {
-            executeAllowanceTransfer(safe[i], token[i], payable(to[i]), amount[i], payment[i], delegate[i], signature[i]);
+    function gasPayment(GnosisSafe safe) internal {
+        if (totalGasPayment > 0 && msg.sender == GELATO) {
+            uint96 gasPayment = totalGasPayment;
+            totalGasPayment = 0;
+            // Transfer payment
+            // solium-disable-next-line security/no-tx-origin
+            transfer(safe, ETH, GELATO, gasPayment);
         }
     }
 
@@ -397,23 +436,23 @@ contract AllowanceModule is SignatureDecoder, Ownable, DSMath {
 
     function getTokenAllowance(address safe, address delegate, address token) public view returns (uint256[5] memory) {
         Allowance memory allowance = getAllowance(safe, delegate, token);
-        if (allowance.tokenAmount > 0) {
-            return [
-                uint256(allowance.tokenAmount),
-                uint256(allowance.spent),
-                uint256(allowance.resetTimeMin),
-                uint256(allowance.lastResetMin),
-                uint256(allowance.nonce)
-            ];
-        } else {
-            return [
-                uint256(allowance.fiatAmount),
-                uint256(allowance.spent),
-                uint256(allowance.resetTimeMin),
-                uint256(allowance.lastResetMin),
-                uint256(allowance.nonce)
-            ];
+        require(token != address(0), "Token address should not address(0)");
+        uint256 allowanceOfToken = allowance.tokenAmount;
+        if (allowance.fiatAmount > 0) {
+            allowanceOfToken = uint256(getTokenQuantity(allowance.fiatAmount, token));
         }
+        return [
+            allowanceOfToken,
+            uint256(allowance.spent),
+            uint256(allowance.resetTimeMin),
+            uint256(allowance.lastResetMin),
+            uint256(allowance.nonce)
+        ];
+    }
+
+    function getEndsOn(address safe, address delegate, address token) public view returns (int8) {
+        Allowance memory allowance = getAllowance(safe, delegate, token);
+        return allowance.endsOn;
     }
 
     /// @dev Allows to add a delegate.
@@ -460,6 +499,7 @@ contract AllowanceModule is SignatureDecoder, Ownable, DSMath {
                 allowance.spent = 0;
                 allowance.resetTimeMin = 0;
                 allowance.lastResetMin = 0;
+                allowance.endsOn = 0;
                 updateAllowance(msg.sender, delegate, token, allowance);
                 emit DeleteAllowance(msg.sender, delegate, token);
             }
@@ -494,27 +534,38 @@ contract AllowanceModule is SignatureDecoder, Ownable, DSMath {
         }
     }
 
-    function addTokenOracle(address token, address oracle) public onlyOwner {
-        require(token != address(0) && oracle != address(0), "Address Can't be Zero");
-        tokenToOracle[token] = oracle;
-        emit AddTokenOracle(token, oracle);
+    function setRegistery(address newRegistery) public onlyOwner {
+        require(newRegistery != address(0), "Address Can't be Zero");
+        address oldRegistery = Chainlink_Registery;
+        Chainlink_Registery = newRegistery;
+        emit SetRegistery(oldRegistery, newRegistery);
     }
 
-    function setGelatoAddress(address payable gelato) public onlyOwner {
-        require(gelato != address(0), "Address Can't be Zero");
-        GELATO = gelato;
-        emit SetGelatoAddress(gelato);
+    function setDenominationsUSD(address newDenominationsUSD) public onlyOwner {
+        require(newDenominationsUSD != address(0), "Address Can't be Zero");
+        address oldDenominationsUSD = DenominationsUSD;
+        DenominationsUSD = newDenominationsUSD;
+        emit SetDenominationsUSD(oldDenominationsUSD, newDenominationsUSD);
     }
 
-    function setGasCost(uint256 _gasCost) public onlyOwner {
-        require(_gasCost > 0, "Gas Cost Can't be Zero");
-        gasCost = _gasCost;
-        emit SetGasCost(gasCost);
+    function setGelatoAddress(address payable newGelato) public onlyOwner {
+        require(newGelato != address(0), "Address Can't be Zero");
+        address oldGelato = GELATO;
+        GELATO = newGelato;
+        emit SetGelatoAddress(oldGelato, newGelato);
     }
 
-    function setPriceThresold(uint256 _thresold) public onlyOwner {
-        require(_thresold > 0, "Price thresold Can't be Zero");
-        priceTimeThresold = _thresold;
-        emit SetPriceThresold(priceTimeThresold);
+    function setGasCost(uint256 newGasCost) public onlyOwner {
+        require(newGasCost > 0, "Gas Cost Can't be Zero");
+        uint256 oldGasCost = gasCost;
+        gasCost = newGasCost;
+        emit SetGasCost(oldGasCost, newGasCost);
+    }
+
+    function setPriceThresold(uint256 newPriceTimeThresold) public onlyOwner {
+        require(newPriceTimeThresold > 0, "Price thresold Can't be Zero");
+        uint256 oldPriceTimeThresold = priceTimeThresold;
+        priceTimeThresold = newPriceTimeThresold;
+        emit SetPriceThresold(oldPriceTimeThresold, newPriceTimeThresold);
     }
 }
