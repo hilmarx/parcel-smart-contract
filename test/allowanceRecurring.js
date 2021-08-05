@@ -83,16 +83,16 @@ contract('AllowanceModule', function(accounts) {
         assert.equal(token.address, tokens[0])
         let allowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[4], token.address)
         let startResetTime = calculateResetTime(startTime, 24 * 60)
-        assert.equal(100, allowance[0])
-        assert.equal(0, allowance[1])
-        assert.equal(24 * 60, allowance[2])
-        assert.equal(startResetTime, allowance[3])
-        assert.equal(1, allowance[4])
+        assert.equal(100, allowance[0][0])
+        assert.equal(0, allowance[0][1])
+        assert.equal(24 * 60, allowance[0][2])
+        assert.equal(startResetTime, allowance[0][3])
+        assert.equal(1, allowance[0][4])
 
         assert.equal(1000, await token.balanceOf(gnosisSafe.address))
         assert.equal(0, await token.balanceOf(accounts[1]))
 
-        let nonce = allowance[4]
+        let nonce = allowance[0][4]
         let transferHash = await safeModule.generateTransferHash(
             gnosisSafe.address, token.address, accounts[1], 60, nonce
         )
@@ -109,14 +109,14 @@ contract('AllowanceModule', function(accounts) {
         assert.equal(60, await token.balanceOf(accounts[1]))
 
         allowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[4], token.address)
-        assert.equal(100, allowance[0])
-        assert.equal(60, allowance[1])
-        assert.equal(24 * 60, allowance[2])
-        assert.equal(startResetTime, allowance[3])
-        assert.equal(2, allowance[4])
+        assert.equal(100, allowance[0][0])
+        assert.equal(60, allowance[0][1])
+        assert.equal(24 * 60, allowance[0][2])
+        assert.equal(startResetTime, allowance[0][3])
+        assert.equal(2, allowance[0][4])
 
         // Check that it fails over limit
-        nonce = allowance[4]
+        nonce = allowance[0][4]
         transferHash = await safeModule.generateTransferHash(
             gnosisSafe.address, token.address, accounts[1], 45, nonce
         )
@@ -142,15 +142,15 @@ contract('AllowanceModule', function(accounts) {
         assert.equal(100, await token.balanceOf(accounts[1]))
 
         allowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[4], token.address)
-        assert.equal(100, allowance[0])
-        assert.equal(100, allowance[1])
-        assert.equal(24 * 60, allowance[2])
-        assert.equal(startResetTime, allowance[3])
-        assert.equal(3, allowance[4])
+        assert.equal(100, allowance[0][0])
+        assert.equal(100, allowance[0][1])
+        assert.equal(24 * 60, allowance[0][2])
+        assert.equal(startResetTime, allowance[0][3])
+        assert.equal(3, allowance[0][4])
 
         // Offset time by 45 min to check that limit is set in specified interval
         await wait(12*60*60 + 45*60)
-        nonce = allowance[4]
+        nonce = allowance[0][4]
         transferHash = await safeModule.generateTransferHash(
             gnosisSafe.address, token.address, accounts[1], 45, nonce
         )
@@ -165,11 +165,11 @@ contract('AllowanceModule', function(accounts) {
         assert.equal(145, await token.balanceOf(accounts[1]))
 
         allowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[4], token.address)
-        assert.equal(100, allowance[0])
-        assert.equal(45, allowance[1])
-        assert.equal(24 * 60, allowance[2])
-        assert.equal(startResetTime + 24 * 60, allowance[3])
-        assert.equal(4, allowance[4])
+        assert.equal(100, allowance[0][0])
+        assert.equal(45, allowance[0][1])
+        assert.equal(24 * 60, allowance[0][2])
+        assert.equal(startResetTime + 24 * 60, allowance[0][3])
+        assert.equal(4, allowance[0][4])
     })
 
     it('multipleExecuteAllowance', async () => {
@@ -201,7 +201,7 @@ contract('AllowanceModule', function(accounts) {
         assert.equal(token.address, tokens[0])
         let allowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[5], token.address)
 
-        let nonce = allowance[4]
+        let nonce = allowance[0][4]
         let transferHash = await safeModule.generateTransferHash(
             gnosisSafe.address, token.address, accounts[1], 50, nonce
         )
@@ -226,7 +226,7 @@ contract('AllowanceModule', function(accounts) {
 
         let allowance2 = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[6], token.address)
 
-        let nonce2 = allowance2[4]
+        let nonce2 = allowance2[0][4]
         let transferHash2 = await safeModule.generateTransferHash(
             gnosisSafe.address, token.address, accounts[1], 50, nonce2
         )

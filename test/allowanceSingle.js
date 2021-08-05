@@ -71,23 +71,23 @@ contract('AllowanceModule delegate', function(accounts) {
         assert.equal(1, tokens.length)
         assert.equal(token.address, tokens[0])
         let tokenAllowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[4], token.address)
-        assert.equal(100, tokenAllowance[0])
-        assert.equal(0, tokenAllowance[1])
-        assert.equal(0, tokenAllowance[2])
+        assert.equal(100, tokenAllowance[0][0])
+        assert.equal(0, tokenAllowance[0][1])
+        assert.equal(0, tokenAllowance[0][2])
         // Reset time should be set to current on first init
-        assert.notEqual(0, tokenAllowance[3])
-        assert.equal(1, tokenAllowance[4])
+        assert.notEqual(0, tokenAllowance[0][3])
+        assert.equal(1, tokenAllowance[0][4])
         let unknownAllowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[3], token.address)
-        assert.equal(0, unknownAllowance[0])
-        assert.equal(0, unknownAllowance[1])
-        assert.equal(0, unknownAllowance[2])
-        assert.equal(0, unknownAllowance[3])
-        assert.equal(0, unknownAllowance[4])
+        assert.equal(0, unknownAllowance[0][0])
+        assert.equal(0, unknownAllowance[0][1])
+        assert.equal(0, unknownAllowance[0][2])
+        assert.equal(0, unknownAllowance[0][3])
+        assert.equal(0, unknownAllowance[0][4])
 
         assert.equal(1000, await token.balanceOf(gnosisSafe.address))
         assert.equal(0, await token.balanceOf(accounts[1]))
 
-        let nonce = tokenAllowance[4]
+        let nonce = tokenAllowance[0][4]
         let transferHash = await safeModule.generateTransferHash(
             gnosisSafe.address, token.address, accounts[1], 60, nonce
         )
@@ -104,20 +104,20 @@ contract('AllowanceModule delegate', function(accounts) {
         assert.equal(60, await token.balanceOf(accounts[1]))
 
         tokenLimit = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[4], token.address)
-        assert.equal(100, tokenLimit[0])
-        assert.equal(60, tokenLimit[1])
-        assert.equal(0, tokenLimit[2])
-        assert.ok(tokenLimit[3] > 0)
-        assert.equal(2, tokenLimit[4])
+        assert.equal(100, tokenLimit[0][0])
+        assert.equal(60, tokenLimit[0][1])
+        assert.equal(0, tokenLimit[0][2])
+        assert.ok(tokenLimit[0][3] > 0)
+        assert.equal(2, tokenLimit[0][4])
 
         let removeDelegateData = await safeModule.contract.methods.removeDelegate(lw.accounts[4], true).encodeABI()
         await execTransaction(safeModule.address, 0, removeDelegateData, CALL, "remove delegate")
         let removedAllowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[4], token.address)
-        assert.equal(0, removedAllowance[0])
-        assert.equal(0, removedAllowance[1])
-        assert.equal(0, removedAllowance[2])
-        assert.equal(0, removedAllowance[3])
-        assert.equal(2, removedAllowance[4])
+        assert.equal(0, removedAllowance[0][0])
+        assert.equal(0, removedAllowance[0][1])
+        assert.equal(0, removedAllowance[0][2])
+        assert.equal(0, removedAllowance[0][3])
+        assert.equal(2, removedAllowance[0][4])
     })
 
     it('Execute multiple ether allowance with delegate', async () => {
@@ -145,17 +145,17 @@ contract('AllowanceModule delegate', function(accounts) {
         assert.equal(1, tokens.length)
         assert.equal(ETH_ADDRESS, tokens[0])
         let tokenAllowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[4], ETH_ADDRESS)
-        assert.equal(web3.utils.toWei("1.0", 'ether'), tokenAllowance[0])
-        assert.equal(0, tokenAllowance[1])
-        assert.equal(0, tokenAllowance[2])
+        assert.equal(web3.utils.toWei("1.0", 'ether'), tokenAllowance[0][0])
+        assert.equal(0, tokenAllowance[0][1])
+        assert.equal(0, tokenAllowance[0][2])
         // Reset time should be set to current on first init
-        assert.notEqual(0, tokenAllowance[3])
-        assert.equal(1, tokenAllowance[4])
+        assert.notEqual(0, tokenAllowance[0][3])
+        assert.equal(1, tokenAllowance[0][4])
 
         assert.equal(await web3.eth.getBalance(gnosisSafe.address), web3.utils.toWei("1.0", 'ether'))
         assert.equal(await web3.eth.getBalance(lw.accounts[0]), 0)
 
-        let nonce = tokenAllowance[4]
+        let nonce = tokenAllowance[0][4]
         let transferHash = await safeModule.generateTransferHash(
             gnosisSafe.address, ETH_ADDRESS, lw.accounts[0], web3.utils.toWei("0.001", 'ether'), nonce
         )
@@ -172,13 +172,13 @@ contract('AllowanceModule delegate', function(accounts) {
         assert.equal(await web3.eth.getBalance(lw.accounts[0]), web3.utils.toWei("0.001", 'ether'))
 
         tokenAllowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[4], ETH_ADDRESS)
-        assert.equal(web3.utils.toWei("1.0", 'ether'), tokenAllowance[0])
-        assert.equal(web3.utils.toWei("0.001", 'ether'), tokenAllowance[1])
-        assert.equal(0, tokenAllowance[2])
-        assert.ok(tokenAllowance[3] > 0)
-        assert.equal(2, tokenAllowance[4])
+        assert.equal(web3.utils.toWei("1.0", 'ether'), tokenAllowance[0][0])
+        assert.equal(web3.utils.toWei("0.001", 'ether'), tokenAllowance[0][1])
+        assert.equal(0, tokenAllowance[0][2])
+        assert.ok(tokenAllowance[0][3] > 0)
+        assert.equal(2, tokenAllowance[0][4])
 
-        nonce = tokenAllowance[4]
+        nonce = tokenAllowance[0][4]
         transferHash = await safeModule.generateTransferHash(
             gnosisSafe.address, ETH_ADDRESS, lw.accounts[0], web3.utils.toWei("0.001", 'ether'), nonce
         )
@@ -194,10 +194,10 @@ contract('AllowanceModule delegate', function(accounts) {
         assert.equal(await web3.eth.getBalance(lw.accounts[0]), web3.utils.toWei("0.002", 'ether'))
 
         tokenAllowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[4], ETH_ADDRESS)
-        assert.equal(web3.utils.toWei("1.0", 'ether'), tokenAllowance[0])
-        assert.equal(web3.utils.toWei("0.002", 'ether'), tokenAllowance[1])
-        assert.equal(0, tokenAllowance[2])
-        assert.ok(tokenAllowance[3] > 0)
-        assert.equal(3, tokenAllowance[4])
+        assert.equal(web3.utils.toWei("1.0", 'ether'), tokenAllowance[0][0])
+        assert.equal(web3.utils.toWei("0.002", 'ether'), tokenAllowance[0][1])
+        assert.equal(0, tokenAllowance[0][2])
+        assert.ok(tokenAllowance[0][3] > 0)
+        assert.equal(3, tokenAllowance[0][4])
     })
 })

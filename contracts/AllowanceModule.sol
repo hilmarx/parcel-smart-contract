@@ -434,25 +434,20 @@ contract AllowanceModule is SignatureDecoder, Ownable, DSMath {
         return tokens[safe][delegate];
     }
 
-    function getTokenAllowance(address safe, address delegate, address token) public view returns (uint256[5] memory) {
+    function getTokenAllowance(address safe, address delegate, address token) public view returns (uint256[5] memory, int8) {
         Allowance memory allowance = getAllowance(safe, delegate, token);
         require(token != address(0), "Token address should not address(0)");
         uint256 allowanceOfToken = allowance.tokenAmount;
         if (allowance.fiatAmount > 0) {
             allowanceOfToken = uint256(getTokenQuantity(allowance.fiatAmount, token));
         }
-        return [
+        return ([
             allowanceOfToken,
             uint256(allowance.spent),
             uint256(allowance.resetTimeMin),
             uint256(allowance.lastResetMin),
             uint256(allowance.nonce)
-        ];
-    }
-
-    function getEndsOn(address safe, address delegate, address token) public view returns (int8) {
-        Allowance memory allowance = getAllowance(safe, delegate, token);
-        return allowance.endsOn;
+        ], allowance.endsOn);
     }
 
     /// @dev Allows to add a delegate.

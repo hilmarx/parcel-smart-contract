@@ -99,9 +99,9 @@ contract('Fiat and EndsOn', function(accounts) {
             '1600',
             UNI_Address
         ).call()
-        console.log('allowance[0]: ', allowance[0], tokenQuantityWithDecimal.toString())
-        assert.isAbove(BigNumber.from(allowance[0]).toNumber(), 70, 'allowance[0] is strictly greater than 70');
-        assert.isBelow(BigNumber.from(allowance[0]).toNumber(), 75, 'allowance[0] is strictly less than 75');
+        console.log('allowance[0][0]: ', allowance[0][0], tokenQuantityWithDecimal.toString())
+        assert.isAbove(BigNumber.from(allowance[0][0]).toNumber(), 65, 'allowance[0][0] is strictly greater than 65');
+        assert.isBelow(BigNumber.from(allowance[0][0]).toNumber(), 75, 'allowance[0][0] is strictly less than 75');
     
     })
 
@@ -129,18 +129,18 @@ contract('Fiat and EndsOn', function(accounts) {
         let tokens = await safeModule.getTokens(gnosisSafe.address, lw.accounts[4])
         assert.equal(1, tokens.length)
         assert.equal(ETH_ADDRESS, tokens[0])
-        let tokenAllowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[4], ETH_ADDRESS)
-        assert.equal(web3.utils.toWei("1.0", 'ether'), tokenAllowance[0])
-        assert.equal(0, tokenAllowance[1])
-        assert.equal(0, tokenAllowance[2])
+        let allowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[4], ETH_ADDRESS)
+        assert.equal(web3.utils.toWei("1.0", 'ether'), allowance[0][0])
+        assert.equal(0, allowance[0][1])
+        assert.equal(0, allowance[0][2])
         // Reset time should be set to current on first init
-        assert.notEqual(0, tokenAllowance[3])
-        assert.equal(1, tokenAllowance[4])
+        assert.notEqual(0, allowance[0][3])
+        assert.equal(1, allowance[0][4])
 
         assert.equal(await web3.eth.getBalance(gnosisSafe.address), web3.utils.toWei("1.0", 'ether'))
         assert.equal(await web3.eth.getBalance(lw.accounts[0]), 0)
 
-        let nonce = tokenAllowance[4]
+        let nonce = allowance[0][4]
         let transferHash = await safeModule.generateTransferHash(
             gnosisSafe.address, ETH_ADDRESS, lw.accounts[0], web3.utils.toWei("0.001", 'ether'), nonce
         )
@@ -152,8 +152,8 @@ contract('Fiat and EndsOn', function(accounts) {
             )
         )
 
-        tokenAllowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[4], ETH_ADDRESS)
-        nonce = tokenAllowance[4]
+        allowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[4], ETH_ADDRESS)
+        nonce = allowance[0][4]
         transferHash = await safeModule.generateTransferHash(
             gnosisSafe.address, ETH_ADDRESS, lw.accounts[0], web3.utils.toWei("0.001", 'ether'), nonce
         )
@@ -166,7 +166,7 @@ contract('Fiat and EndsOn', function(accounts) {
         )
 
         tokenAllowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[4], ETH_ADDRESS)
-        nonce = tokenAllowance[4]
+        nonce = tokenAllowance[0][4]
         transferHash = await safeModule.generateTransferHash(
             gnosisSafe.address, ETH_ADDRESS, lw.accounts[0], web3.utils.toWei("0.001", 'ether'), nonce
         )
@@ -184,7 +184,6 @@ contract('Fiat and EndsOn', function(accounts) {
             ),
             'executeAllowanceTransfer'
         )
-
 
         assert.equal(await web3.eth.getBalance(gnosisSafe.address), web3.utils.toWei("0.997", 'ether'))
         assert.equal(await web3.eth.getBalance(lw.accounts[0]), web3.utils.toWei("0.003", 'ether'))
