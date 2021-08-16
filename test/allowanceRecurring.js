@@ -1,9 +1,6 @@
 const utils = require('@gnosis.pm/safe-contracts/test/utils/general')
 const { wait, waitUntilBlock } = require('./utils')(web3);
 
-const {expect} = require('chai')
-const truffleAssert = require('truffle-assertions');
-
 const truffleContract = require("@truffle/contract")
 
 const GnosisSafeBuildInfo = require("@gnosis.pm/safe-contracts/build/contracts/GnosisSafe.json")
@@ -23,14 +20,14 @@ contract('AllowanceModule', function(accounts) {
 
     const CALL = 0
     const ADDRESS_0 = "0x0000000000000000000000000000000000000000"
+    const ETH_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
 
     beforeEach(async function() {
         // Create lightwallet
         lw = await utils.createLightwallet()
 
         // Create Master Copies
-        safeModule = await AllowanceModule.new(lw.accounts[0])
-
+        safeModule = await AllowanceModule.new()
         const gnosisSafeMasterCopy = await GnosisSafe.new({ from: accounts[0] })
         const proxy = await GnosisSafeProxy.new(gnosisSafeMasterCopy.address, { from: accounts[0] })
         gnosisSafe = await GnosisSafe.at(proxy.address)
@@ -75,7 +72,7 @@ contract('AllowanceModule', function(accounts) {
         assert.equal(lw.accounts[4], delegates.results[0].toLowerCase())
 
         let startTime = currentMinutes() - 30
-        let setAllowanceData = await safeModule.contract.methods.setAllowance(lw.accounts[4], token.address, 100, 0, 60 * 24, startTime, 0).encodeABI()
+        let setAllowanceData = await safeModule.contract.methods.setAllowance(lw.accounts[4], token.address, 100, 60 * 24, startTime).encodeABI()
         await execTransaction(safeModule.address, 0, setAllowanceData, CALL, "set allowance")
 
         let tokens = await safeModule.getTokens(gnosisSafe.address, lw.accounts[4])
@@ -83,179 +80,92 @@ contract('AllowanceModule', function(accounts) {
         assert.equal(token.address, tokens[0])
         let allowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[4], token.address)
         let startResetTime = calculateResetTime(startTime, 24 * 60)
-        assert.equal(100, allowance[0][0])
-        assert.equal(0, allowance[0][1])
-        assert.equal(24 * 60, allowance[0][2])
-        assert.equal(startResetTime, allowance[0][3])
-        assert.equal(1, allowance[0][4])
+        assert.equal(100, allowance[0])
+        assert.equal(0, allowance[1])
+        assert.equal(24 * 60, allowance[2])
+        assert.equal(startResetTime, allowance[3])
+        assert.equal(1, allowance[4])
 
         assert.equal(1000, await token.balanceOf(gnosisSafe.address))
         assert.equal(0, await token.balanceOf(accounts[1]))
 
-        let nonce = allowance[0][4]
+        let nonce = allowance[4]
         let transferHash = await safeModule.generateTransferHash(
-            gnosisSafe.address, token.address, accounts[1], 60, nonce
+            gnosisSafe.address, token.address, lw.accounts[4], 60, ADDRESS_0, 0, nonce
         )
         let signature = utils.signTransaction(lw, [lw.accounts[4]], transferHash)
 
         utils.logGasUsage(
             'executeAllowanceTransfer',
             await safeModule.executeAllowanceTransfer(
-                gnosisSafe.address, token.address, accounts[1], 60, 0, lw.accounts[4], signature
+                gnosisSafe.address, token.address, lw.accounts[4], 60, ADDRESS_0, 0, lw.accounts[4], signature
             )
         )
 
         assert.equal(940, await token.balanceOf(gnosisSafe.address))
-        assert.equal(60, await token.balanceOf(accounts[1]))
+        assert.equal(60, await token.balanceOf(lw.accounts[4]))
 
         allowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[4], token.address)
-        assert.equal(100, allowance[0][0])
-        assert.equal(60, allowance[0][1])
-        assert.equal(24 * 60, allowance[0][2])
-        assert.equal(startResetTime, allowance[0][3])
-        assert.equal(2, allowance[0][4])
+        assert.equal(100, allowance[0])
+        assert.equal(60, allowance[1])
+        assert.equal(24 * 60, allowance[2])
+        assert.equal(startResetTime, allowance[3])
+        assert.equal(2, allowance[4])
 
         // Check that it fails over limit
-        nonce = allowance[0][4]
+        nonce = allowance[4]
         transferHash = await safeModule.generateTransferHash(
-            gnosisSafe.address, token.address, accounts[1], 45, nonce
+            gnosisSafe.address, token.address, accounts[1], 45, ADDRESS_0, 0, nonce
         )
         signature = utils.signTransaction(lw, [lw.accounts[4]], transferHash)
         utils.assertRejects(
             safeModule.executeAllowanceTransfer(
-                gnosisSafe.address, token.address, accounts[1], 45, 0, lw.accounts[4], signature
+                gnosisSafe.address, token.address, accounts[1], 45, ADDRESS_0, 0, lw.accounts[4], signature
             ), 
             "Should not allow if over the limit"
         )
         await wait(12*60*60)
         transferHash = await safeModule.generateTransferHash(
-            gnosisSafe.address, token.address, accounts[1], 40, nonce
+            gnosisSafe.address, token.address, lw.accounts[4], 40, ADDRESS_0, 0, nonce
         )
         signature = utils.signTransaction(lw, [lw.accounts[4]], transferHash)
         utils.logGasUsage(
             'executeAllowanceTransfer',
             await safeModule.executeAllowanceTransfer(
-                gnosisSafe.address, token.address, accounts[1], 40, 0, lw.accounts[4], signature
+                gnosisSafe.address, token.address, lw.accounts[4], 40, ADDRESS_0, 0, lw.accounts[4], signature
             )
         )
         assert.equal(900, await token.balanceOf(gnosisSafe.address))
-        assert.equal(100, await token.balanceOf(accounts[1]))
+        assert.equal(100, await token.balanceOf(lw.accounts[4]))
 
         allowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[4], token.address)
-        assert.equal(100, allowance[0][0])
-        assert.equal(100, allowance[0][1])
-        assert.equal(24 * 60, allowance[0][2])
-        assert.equal(startResetTime, allowance[0][3])
-        assert.equal(3, allowance[0][4])
+        assert.equal(100, allowance[0])
+        assert.equal(100, allowance[1])
+        assert.equal(24 * 60, allowance[2])
+        assert.equal(startResetTime, allowance[3])
+        assert.equal(3, allowance[4])
 
         // Offset time by 45 min to check that limit is set in specified interval
         await wait(12*60*60 + 45*60)
-        nonce = allowance[0][4]
+        nonce = allowance[4]
         transferHash = await safeModule.generateTransferHash(
-            gnosisSafe.address, token.address, accounts[1], 45, nonce
+            gnosisSafe.address, token.address, lw.accounts[4], 45, ADDRESS_0, 0, nonce
         )
         signature = utils.signTransaction(lw, [lw.accounts[4]], transferHash)
         utils.logGasUsage(
             'executeAllowanceTransfer',
             await safeModule.executeAllowanceTransfer(
-                gnosisSafe.address, token.address, accounts[1], 45, 0, lw.accounts[4], signature
+                gnosisSafe.address, token.address, lw.accounts[4], 45, ADDRESS_0, 0, lw.accounts[4], signature
             )
         )
         assert.equal(855, await token.balanceOf(gnosisSafe.address))
-        assert.equal(145, await token.balanceOf(accounts[1]))
+        assert.equal(145, await token.balanceOf(lw.accounts[4]))
 
         allowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[4], token.address)
-        assert.equal(100, allowance[0][0])
-        assert.equal(45, allowance[0][1])
-        assert.equal(24 * 60, allowance[0][2])
-        assert.equal(startResetTime + 24 * 60, allowance[0][3])
-        assert.equal(4, allowance[0][4])
-    })
-
-    it('multipleExecuteAllowance', async () => {
-        const token = await TestToken.new({from: accounts[0]})
-        await token.transfer(gnosisSafe.address, 1000, {from: accounts[0]}) 
-        //const mintToken = await TestCompound.new(sourceToken.address)
-
-        console.log(lw.accounts[5], lw.accounts[6], )
-        
-        let enableModuleData = await gnosisSafe.contract.methods.enableModule(safeModule.address).encodeABI()
-        await execTransaction(gnosisSafe.address, 0, enableModuleData, CALL, "enable module")
-        let modules = await gnosisSafe.getModules()
-        assert.equal(1, modules.length)
-        assert.equal(safeModule.address, modules[0])
-
-        let addDelegateData = await safeModule.contract.methods.addDelegate(lw.accounts[5]).encodeABI()
-        await execTransaction(safeModule.address, 0, addDelegateData, CALL, "add delegate")
-
-        let delegates = await safeModule.getDelegates(gnosisSafe.address, 0, 10)
-        assert.equal(1, delegates.results.length)
-        assert.equal(lw.accounts[5], delegates.results[0].toLowerCase())
-
-        let startTime = currentMinutes() - 30
-        let setAllowanceData = await safeModule.contract.methods.setAllowance(lw.accounts[5], token.address, 100, 0, 0, 0, 0).encodeABI()
-        await execTransaction(safeModule.address, 0, setAllowanceData, CALL, "set allowance")
-
-        let tokens = await safeModule.getTokens(gnosisSafe.address, lw.accounts[5])
-        assert.equal(1, tokens.length)
-        assert.equal(token.address, tokens[0])
-        let allowance = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[5], token.address)
-
-        let nonce = allowance[0][4]
-        let transferHash = await safeModule.generateTransferHash(
-            gnosisSafe.address, token.address, accounts[1], 50, nonce
-        )
-        let signature = utils.signTransaction(lw, [lw.accounts[5]], transferHash)
-
-        // utils.logGasUsage(
-        //     'executeAllowanceTransfer',
-        //     await safeModule.executeAllowanceTransfer(
-        //         gnosisSafe.address, token.address, accounts[1], 60, 0, lw.accounts[5], signature
-        //     )
-        // )
-
-        let addDelegateData2 = await safeModule.contract.methods.addDelegate(lw.accounts[6]).encodeABI()
-        await execTransaction(safeModule.address, 0, addDelegateData2, CALL, "add delegate")
-
-        let delegates2 = await safeModule.getDelegates(gnosisSafe.address, 0, 10)
-        assert.equal(2, delegates2.results.length)
-        assert.equal(lw.accounts[6], delegates2.results[0].toLowerCase())
-
-        let setAllowanceData2 = await safeModule.contract.methods.setAllowance(lw.accounts[6], token.address, 100, 0, 0, 0, 0).encodeABI()
-        await execTransaction(safeModule.address, 0, setAllowanceData2, CALL, "set allowance")
-
-        let allowance2 = await safeModule.getTokenAllowance(gnosisSafe.address, lw.accounts[6], token.address)
-
-        let nonce2 = allowance2[0][4]
-        let transferHash2 = await safeModule.generateTransferHash(
-            gnosisSafe.address, token.address, accounts[1], 50, nonce2
-        )
-        let signature2 = utils.signTransaction(lw, [lw.accounts[6]], transferHash2)
-
-        await truffleAssert.reverts(
-            safeModule.multipleExecuteAllowanceTransfer(
-                gnosisSafe.address, 
-                [token.address, token.address], 
-                [accounts[1], accounts[1]], 
-                [50, 50],
-                [0], 
-                [lw.accounts[5], lw.accounts[6]], 
-                [signature, signature2]
-            ), 
-            "Array length mismatch"
-        );
-
-        utils.logGasUsage(
-            'multipleExecuteAllowanceTransfer',
-            await safeModule.multipleExecuteAllowanceTransfer(
-                gnosisSafe.address, 
-                [token.address, token.address], 
-                [accounts[1], accounts[1]], 
-                [50, 50],
-                [0, 0], 
-                [lw.accounts[5], lw.accounts[6]], 
-                [signature, signature2]
-            )
-        )
+        assert.equal(100, allowance[0])
+        assert.equal(45, allowance[1])
+        assert.equal(24 * 60, allowance[2])
+        assert.equal(startResetTime + 24 * 60, allowance[3])
+        assert.equal(4, allowance[4])
     })
 })
