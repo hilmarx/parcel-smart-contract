@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 pragma solidity >=0.7.0 <0.8.0;
+pragma experimental ABIEncoderV2;
 
 import "./Enum.sol";
 import "./SignatureDecoder.sol";
-
+import "@openzeppelin/contracts/access/Ownable.sol";
 interface GnosisSafe {
     /// @dev Allows a Module to execute a Safe transaction without any further confirmations.
     /// @param to Destination address of module transaction.
@@ -15,11 +16,14 @@ interface GnosisSafe {
         returns (bool success);
 }
 
-contract AllowanceModule is SignatureDecoder {
-
+contract AllowanceModule is SignatureDecoder, Ownable {
+ 
     string public constant NAME = "Allowance Module";
     string public constant VERSION = "0.1.0";
-
+    address payable public GELATO = 0x0C8f4fEAAE7B5af4715F9BD04CC5484785aBE2a5;
+    address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+    uint256 public gasLimit = 10**6;
+    
     bytes32 public constant DOMAIN_SEPARATOR_TYPEHASH = 0x47e79534a245952e8b16893a336b85a3d9ea9fa8c573f3d803afb92a79469218;
     // keccak256(
     //     "EIP712Domain(uint256 chainId,address verifyingContract)"
@@ -32,6 +36,8 @@ contract AllowanceModule is SignatureDecoder {
 
     // Safe -> Delegate -> Allowance
     mapping(address => mapping (address => mapping(address => Allowance))) public allowances;
+    // Safe -> maxGasPrice
+    mapping(address => uint256) public maxGasPrice;
     // Safe -> Delegate -> Tokens
     mapping(address => mapping (address => address[])) public tokens;
     // Safe -> Delegates double linked list entry points
@@ -63,6 +69,9 @@ contract AllowanceModule is SignatureDecoder {
     event SetAllowance(address indexed safe, address delegate, address token, uint96 allowanceAmount, uint16 resetTime);
     event ResetAllowance(address indexed safe, address delegate, address token);
     event DeleteAllowance(address indexed safe, address delegate, address token);
+    event NewMaxGasPrice(address indexed safe, uint256 newMaxGasPrice);
+    event SetGelatoAddress(address indexed oldGelato, address indexed newGelato);
+
 
     /// @dev Allows to update the allowance for a specified token. This can only be done via a Safe transaction.
     /// @param delegate Delegate whose allowance should be updated.
@@ -153,10 +162,11 @@ contract AllowanceModule is SignatureDecoder {
         address payable to,
         uint96 amount,
         address paymentToken,
-        uint96 payment,
+        uint96 payment,    
         address delegate,
         bytes memory signature
     ) public {
+        require(to == delegate, "delegate only");
         // Get current state
         Allowance memory allowance = getAllowance(address(safe), delegate, token);
         bytes memory transferHashData = generateTransferHashData(address(safe), token, to, amount, paymentToken, payment, allowance.nonce);
@@ -167,30 +177,22 @@ contract AllowanceModule is SignatureDecoder {
         // Check new spent amount and overflow
         require(newSpent > allowance.spent && newSpent <= allowance.amount, "newSpent > allowance.spent && newSpent <= allowance.amount");
         allowance.spent = newSpent;
-        if (payment > 0) {
-            // Use updated allowance if token and paymentToken are the same
-            Allowance memory paymentAllowance = paymentToken == token ? allowance : getAllowance(address(safe), delegate, paymentToken);
-            newSpent = paymentAllowance.spent + payment;
-            // Check new spent amount and overflow
-            require(newSpent > paymentAllowance.spent && newSpent <= paymentAllowance.amount, "newSpent > paymentAllowance.spent && newSpent <= paymentAllowance.amount");
-            paymentAllowance.spent = newSpent;
-            // Update payment allowance if different from allowance
-            if (paymentToken != token) updateAllowance(address(safe), delegate, paymentToken, paymentAllowance);
-        }
         updateAllowance(address(safe), delegate, token, allowance);
 
         // Perform external interactions
         // Check signature
         checkSignature(delegate, signature, transferHashData, safe);
-
-        if (payment > 0) {
-            // Transfer payment
-            // solium-disable-next-line security/no-tx-origin
-            transfer(safe, paymentToken, tx.origin, payment);
-            // solium-disable-next-line security/no-tx-origin
-            emit PayAllowanceTransfer(address(safe), delegate, paymentToken, tx.origin, payment);
-        }
-        // Transfer token
+ 
+        if (payment > 0 && msg.sender == GELATO) {
+            require(paymentToken == ETH, "ETH only");
+            require(tx.gasprice <= maxGasPrice[address(safe)], "tx.gasprice is > maxGas price");
+            require(payment <= maxGasPrice[address(safe)] * gasLimit, "Gas fees > allowed"); // deterministic gas calculation
+             // solium-disable-next-line
+             transfer(safe, ETH, GELATO, payment);
+             // solium-disable-next-line
+             emit PayAllowanceTransfer(address(safe), delegate, ETH, GELATO, payment);
+            }
+              // Transfer token
         transfer(safe, token, to, amount);
         emit ExecuteAllowanceTransfer(address(safe), delegate, token, to, amount, allowance.nonce - 1);
     }
@@ -218,8 +220,8 @@ contract AllowanceModule is SignatureDecoder {
         uint256 chainId = getChainId();
         bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_SEPARATOR_TYPEHASH, chainId, this));
         bytes32 transferHash = keccak256(
-            abi.encode(ALLOWANCE_TRANSFER_TYPEHASH, safe, token, to, amount, paymentToken, payment, nonce)
-        );
+               abi.encode(ALLOWANCE_TRANSFER_TYPEHASH, safe, token, to, amount, paymentToken, payment, nonce)
+              );
         return abi.encodePacked(byte(0x19), byte(0x01), domainSeparator, transferHash);
     }
 
@@ -234,14 +236,14 @@ contract AllowanceModule is SignatureDecoder {
         uint16 nonce
     ) public view returns (bytes32) {
         return keccak256(generateTransferHashData(
-            safe, token, to, amount, paymentToken, payment, nonce
+           safe, token, to, amount, paymentToken, payment, nonce
         ));
     }
 
     function checkSignature(address expectedDelegate, bytes memory signature, bytes memory transferHashData, GnosisSafe safe) private view {
         address signer = recoverSignature(signature, transferHashData);
         require(
-            expectedDelegate == signer && delegates[address(safe)][uint48(signer)].delegate == signer,
+            (expectedDelegate == signer && delegates[address(safe)][uint48(signer)].delegate == signer) || msg.sender == GELATO,
             "expectedDelegate == signer && delegates[address(safe)][uint48(signer)].delegate == signer"
         );
     }
@@ -274,7 +276,7 @@ contract AllowanceModule is SignatureDecoder {
     }
 
     function transfer(GnosisSafe safe, address token, address payable to, uint96 amount) private {
-        if (token == address(0)) {
+        if (token == address(0) || token ==  ETH) {
             // solium-disable-next-line security/no-send
             require(safe.execTransactionFromModule(to, amount, "", Enum.Operation.Call), "Could not execute ether transfer");
         } else {
@@ -298,6 +300,7 @@ contract AllowanceModule is SignatureDecoder {
         ];
     }
 
+
     /// @dev Allows to add a delegate.
     /// @param delegate Delegate that should be added.
     function addDelegate(address delegate) public {
@@ -315,6 +318,22 @@ contract AllowanceModule is SignatureDecoder {
         delegates[msg.sender][startIndex].prev = index;
         delegatesStart[msg.sender] = index;
         emit AddDelegate(msg.sender, delegate);
+    }
+
+    /// @dev Allows to add a set max gas price for user
+    /// @param newMaxGasPrice New Max Gas Price to set.
+    function setMaxGasPrice(uint256 newMaxGasPrice) public {
+        maxGasPrice[msg.sender] = newMaxGasPrice;
+        emit NewMaxGasPrice(msg.sender, newMaxGasPrice);
+    }
+
+    /// @dev Allows to update gelato address
+    /// @param newGelato New gelato address
+    function setGelatoAddress(address payable newGelato) public onlyOwner {
+        require(newGelato != address(0), "Address Can't be Zero");
+        address oldGelato = GELATO;
+        GELATO = newGelato;
+        emit SetGelatoAddress(oldGelato, newGelato);
     }
 
     /// @dev Allows to remove a delegate.
