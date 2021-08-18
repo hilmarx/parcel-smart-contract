@@ -251,7 +251,7 @@ contract AllowanceModule is SignatureDecoder, Ownable {
     function checkSignature(address expectedDelegate, bytes memory signature, bytes memory transferHashData, GnosisSafe safe) private view {
         address signer = recoverSignature(signature, transferHashData);
         require(
-            expectedDelegate == signer && delegates[address(safe)][uint48(signer)].delegate == signer || msg.sender == GELATO_POKE_ME,
+            (expectedDelegate == signer && delegates[address(safe)][uint48(signer)].delegate == signer) || msg.sender == GELATO_POKE_ME,
             "expectedDelegate == signer && delegates[address(safe)][uint48(signer)].delegate == signer"
         );
     }
