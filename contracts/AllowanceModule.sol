@@ -21,6 +21,7 @@ contract AllowanceModule is SignatureDecoder, Ownable {
     string public constant NAME = "Allowance Module";
     string public constant VERSION = "0.1.0";
     address payable public GELATO = 0x0C8f4fEAAE7B5af4715F9BD04CC5484785aBE2a5;
+    address public GELATO_POKE_ME = 0x8bee7c6A531cBD0a4B5b9ac76792eEDe16b7b317;
     address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
     uint256 public gasLimit = 10**6;
     
@@ -38,6 +39,8 @@ contract AllowanceModule is SignatureDecoder, Ownable {
     mapping(address => mapping (address => mapping(address => Allowance))) public allowances;
     // Safe -> maxGasPrice
     mapping(address => uint256) public maxGasPrice;
+    // Safe -> paymentToken
+    mapping(address => mapping(address => bool)) public paymentTokens;
     // Safe -> Delegate -> Tokens
     mapping(address => mapping (address => address[])) public tokens;
     // Safe -> Delegates double linked list entry points
@@ -71,6 +74,8 @@ contract AllowanceModule is SignatureDecoder, Ownable {
     event DeleteAllowance(address indexed safe, address delegate, address token);
     event NewMaxGasPrice(address indexed safe, uint256 newMaxGasPrice);
     event SetGelatoAddress(address indexed oldGelato, address indexed newGelato);
+    event SetPaymentToken(address indexed paymentToken);
+    event RemovePaymentToken(address indexed paymentToken);
 
 
     /// @dev Allows to update the allowance for a specified token. This can only be done via a Safe transaction.
@@ -183,14 +188,17 @@ contract AllowanceModule is SignatureDecoder, Ownable {
         // Check signature
         checkSignature(delegate, signature, transferHashData, safe);
  
-        if (payment > 0 && msg.sender == GELATO) {
-            require(paymentToken == ETH, "ETH only");
+        if (payment > 0 && msg.sender == GELATO_POKE_ME) {
+            if (paymentToken == ETH) {
+                require(payment <= maxGasPrice[address(safe)] * gasLimit, "Gas fees > allowed"); // deterministic gas calculation
+            } else {
+                require(paymentTokens[address(safe)][paymentToken], "payment token not whitelisted");
+            }
             require(tx.gasprice <= maxGasPrice[address(safe)], "tx.gasprice is > maxGas price");
-            require(payment <= maxGasPrice[address(safe)] * gasLimit, "Gas fees > allowed"); // deterministic gas calculation
              // solium-disable-next-line
-             transfer(safe, ETH, GELATO, payment);
+             transfer(safe, paymentToken, GELATO, payment);
              // solium-disable-next-line
-             emit PayAllowanceTransfer(address(safe), delegate, ETH, GELATO, payment);
+             emit PayAllowanceTransfer(address(safe), delegate, paymentToken, GELATO, payment);
             }
               // Transfer token
         transfer(safe, token, to, amount);
@@ -243,7 +251,7 @@ contract AllowanceModule is SignatureDecoder, Ownable {
     function checkSignature(address expectedDelegate, bytes memory signature, bytes memory transferHashData, GnosisSafe safe) private view {
         address signer = recoverSignature(signature, transferHashData);
         require(
-            (expectedDelegate == signer && delegates[address(safe)][uint48(signer)].delegate == signer) || msg.sender == GELATO,
+            expectedDelegate == signer && delegates[address(safe)][uint48(signer)].delegate == signer || msg.sender == GELATO_POKE_ME,
             "expectedDelegate == signer && delegates[address(safe)][uint48(signer)].delegate == signer"
         );
     }
@@ -367,6 +375,26 @@ contract AllowanceModule is SignatureDecoder, Ownable {
         }
         delete delegates[msg.sender][uint48(delegate)];
         emit RemoveDelegate(msg.sender, delegate);
+    }
+
+    /// @dev Allows Gelato to use this token as payment for executing transactions
+    /// @param token New payment token to activate
+    function setPaymentToken(address token) public {
+        require(token != address(0), "Address Can't be Zero");
+        bool isSet = paymentTokens[msg.sender][token];
+        require(!isSet, "Payment Token already set");
+        paymentTokens[msg.sender][token] = true;
+        emit SetPaymentToken(token);
+    }
+
+    /// @dev Disallows Gelato to use this token as payment for executing transactions
+    /// @param token Old payment token to remove
+    function removePaymentToken(address token) public {
+        require(token != address(0), "Address Can't be Zero");
+        bool isSet = paymentTokens[msg.sender][token];
+        require(isSet, "Payment Token is not set");
+        paymentTokens[msg.sender][token] = false;
+        emit RemovePaymentToken(token);
     }
 
     function getDelegates(address safe, uint48 start, uint8 pageSize) public view returns (address[] memory results, uint48 next) {
