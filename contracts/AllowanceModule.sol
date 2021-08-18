@@ -20,7 +20,7 @@ contract AllowanceModule is SignatureDecoder, Ownable {
  
     string public constant NAME = "Allowance Module";
     string public constant VERSION = "0.1.0";
-    address payable public GELATO = 0x0C8f4fEAAE7B5af4715F9BD04CC5484785aBE2a5;
+    address payable public GELATO = 0x3CACa7b48D0573D793d3b0279b5F0029180E83b6;
     address public GELATO_POKE_ME = 0x8bee7c6A531cBD0a4B5b9ac76792eEDe16b7b317;
     address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
     uint256 public gasLimit = 10**6;
