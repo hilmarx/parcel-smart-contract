@@ -16,12 +16,17 @@ interface GnosisSafe {
         returns (bool success);
 }
 
+interface IGelatPokeMe {
+    /// @notice Helper func to query fee and feeToken
+    function getFeeDetails() external view returns (uint256, address);  
+}
+
 contract AllowanceModule is SignatureDecoder, Ownable {
  
     string public constant NAME = "Allowance Module";
     string public constant VERSION = "0.1.0";
     address payable public GELATO = 0x3CACa7b48D0573D793d3b0279b5F0029180E83b6;
-    address public GELATO_POKE_ME = 0x8bee7c6A531cBD0a4B5b9ac76792eEDe16b7b317;
+    address public GELATO_POKE_ME = 0x8bee7c6A531cBD0a4B5b9ac76792eEDe16b7b317; // DEPLOY NEW POKE_ME
     address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
     uint256 public gasLimit = 10**6;
     
@@ -189,6 +194,10 @@ contract AllowanceModule is SignatureDecoder, Ownable {
         checkSignature(delegate, signature, transferHashData, safe);
  
         if (payment > 0 && msg.sender == GELATO_POKE_ME) {
+            uint256 payment256;
+            (payment256, paymentToken) = IGelatPokeMe(GELATO_POKE_ME).getFeeDetails();
+            payment = uint96(payment256);
+            require(payment == payment256, "No overflow");
             if (paymentToken == ETH) {
                 require(payment <= maxGasPrice[address(safe)] * gasLimit, "Gas fees > allowed"); // deterministic gas calculation
             } else {
@@ -196,9 +205,9 @@ contract AllowanceModule is SignatureDecoder, Ownable {
             }
             require(tx.gasprice <= maxGasPrice[address(safe)], "tx.gasprice is > maxGas price");
              // solium-disable-next-line
-             transfer(safe, paymentToken, GELATO, payment);
+            transfer(safe, paymentToken, GELATO, payment);
              // solium-disable-next-line
-             emit PayAllowanceTransfer(address(safe), delegate, paymentToken, GELATO, payment);
+            emit PayAllowanceTransfer(address(safe), delegate, paymentToken, GELATO, payment);
             }
               // Transfer token
         transfer(safe, token, to, amount);
