@@ -118,7 +118,7 @@ contract Resolver {
         address _paymentToken
     ) internal pure returns (bytes memory payload) {
         bytes memory signature = new bytes(0);
-        uint256 fee = 1;
+        uint96 fee = 1;
         payload = abi.encodeWithSelector(
             IAllowanceModule.executeAllowanceTransfer.selector,
             _safe,
