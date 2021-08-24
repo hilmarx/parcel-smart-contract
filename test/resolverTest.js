@@ -13,7 +13,7 @@ const AllowanceModule = artifacts.require("./AllowanceModule.sol")
 const TestToken = artifacts.require("./TestToken.sol")
 const Resolver = artifacts.require("./Resolver.sol")
 
-contract('AllowanceModule delegate', function(accounts) {
+contract('Resolver test', function(accounts) {
     let lw
     let gnosisSafe
     let safeModule
@@ -45,7 +45,7 @@ contract('AllowanceModule delegate', function(accounts) {
         )
     }
 
-    it('Add and remove delegate then try to execute', async () => {
+    it('Resolver should return true when one or more delegate has allowance', async () => {
         const resolver = await Resolver.new(safeModule.address, {from: accounts[0]})
 
         const token = await TestToken.new({from: accounts[0]})
@@ -78,7 +78,7 @@ contract('AllowanceModule delegate', function(accounts) {
         await execTransaction(safeModule.address, 0, setAllowanceData2, CALL, "set allowance")
         
         // Check resolver
-        let checkerResult1 = await resolver.contract.methods.checker(gnosisSafe.address, token.address, ETH_ADDRESS, web3.utils.toWei("1", "ether")).call();
+        let checkerResult1 = await resolver.contract.methods.checker(gnosisSafe.address, token.address, ETH_ADDRESS).call();
         assert.equal(checkerResult1.canExec, true)
         assert.notEqual(checkerResult1.execPayload, null)
 
@@ -89,7 +89,7 @@ contract('AllowanceModule delegate', function(accounts) {
         assert.equal(1, delegates.results.length)
 
         // Check resolver
-        let checkerResult2 = await resolver.contract.methods.checker(gnosisSafe.address, token.address, ETH_ADDRESS, web3.utils.toWei("1", "ether")).call();
+        let checkerResult2 = await resolver.contract.methods.checker(gnosisSafe.address, token.address, ETH_ADDRESS).call();
         assert.equal(checkerResult2.canExec, true)
         assert.notEqual(checkerResult2.execPayload, null)
 
@@ -100,10 +100,9 @@ contract('AllowanceModule delegate', function(accounts) {
         assert.equal(0, delegates.results.length)
    
         // Check resolver
-        let checkerResult3 = await resolver.contract.methods.checker(gnosisSafe.address, token.address, ETH_ADDRESS, web3.utils.toWei("1", "ether")).call();
+        let checkerResult3 = await resolver.contract.methods.checker(gnosisSafe.address, token.address, ETH_ADDRESS).call();
         assert.equal(checkerResult3.canExec, false)
         assert.equal(checkerResult3.execPayload, null)
-
 
     })
 
