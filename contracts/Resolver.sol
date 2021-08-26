@@ -54,8 +54,7 @@ contract Resolver {
 
     function checker(
         address _safe,
-        address _token,
-        address _paymentToken
+        address _token
     ) external view returns (bool canExec, bytes memory execPayload) {
         uint48 entry = allowanceModule.delegatesStart(_safe);
 
@@ -74,8 +73,7 @@ contract Resolver {
                     _safe,
                     _token,
                     currentNode.delegate,
-                    amount,
-                    _paymentToken
+                    amount
                 );
                 return (canExec, execPayload);
             }
@@ -114,18 +112,19 @@ contract Resolver {
         address _safe,
         address _token,
         address _delegate,
-        uint96 _amount,
-        address _paymentToken
+        uint96 _amount
     ) internal pure returns (bytes memory payload) {
         bytes memory signature = new bytes(0);
         uint96 fee = 1;
+        address paymentToken = address(0);
+
         payload = abi.encodeWithSelector(
             IAllowanceModule.executeAllowanceTransfer.selector,
             _safe,
             _token,
             _delegate,
             _amount,
-            _paymentToken,
+            paymentToken,
             fee,
             _delegate,
             signature

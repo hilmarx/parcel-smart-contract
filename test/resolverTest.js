@@ -78,7 +78,7 @@ contract('Resolver test', function(accounts) {
         await execTransaction(safeModule.address, 0, setAllowanceData2, CALL, "set allowance")
         
         // Check resolver
-        let checkerResult1 = await resolver.contract.methods.checker(gnosisSafe.address, token.address, ETH_ADDRESS).call();
+        let checkerResult1 = await resolver.contract.methods.checker(gnosisSafe.address, token.address).call();
         assert.equal(checkerResult1.canExec, true)
         assert.notEqual(checkerResult1.execPayload, null)
 
@@ -89,7 +89,7 @@ contract('Resolver test', function(accounts) {
         assert.equal(1, delegates.results.length)
 
         // Check resolver
-        let checkerResult2 = await resolver.contract.methods.checker(gnosisSafe.address, token.address, ETH_ADDRESS).call();
+        let checkerResult2 = await resolver.contract.methods.checker(gnosisSafe.address, token.address).call();
         assert.equal(checkerResult2.canExec, true)
         assert.notEqual(checkerResult2.execPayload, null)
 
@@ -100,7 +100,7 @@ contract('Resolver test', function(accounts) {
         assert.equal(0, delegates.results.length)
    
         // Check resolver
-        let checkerResult3 = await resolver.contract.methods.checker(gnosisSafe.address, token.address, ETH_ADDRESS).call();
+        let checkerResult3 = await resolver.contract.methods.checker(gnosisSafe.address, token.address).call();
         assert.equal(checkerResult3.canExec, false)
         assert.equal(checkerResult3.execPayload, null)
 
