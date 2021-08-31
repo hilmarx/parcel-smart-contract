@@ -51,8 +51,8 @@ contract AllowanceModule is SignatureDecoder, Ownable {
  
     string public constant NAME = "Allowance Module";
     string public constant VERSION = "0.1.0";
-    address payable public constant GELATO = 0x3CACa7b48D0573D793d3b0279b5F0029180E83b6;
-    address public constant GELATO_POKE_ME = 0xB3f5503f93d5Ef84b06993a1975B9D21B962892F;
+    address payable public immutable GELATO;
+    address public immutable GELATO_POKE_ME;
     address public resolver;
     address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
     uint256 public gasLimit = 10**6;
@@ -111,6 +111,11 @@ contract AllowanceModule is SignatureDecoder, Ownable {
     event RemovePaymentToken(address indexed paymentToken);
     event CreateGelatoTask(address indexed safe, address token, address paymentToken);
     event CancelGelatoTask(address indexed safe, address token, address paymentToken);
+
+    constructor(address payable gelato, address gelatoPokeMe){
+        GELATO = gelato;
+        GELATO_POKE_ME = gelatoPokeMe;
+    }
 
     /// @dev Allows to update the allowance for a specified token. This can only be done via a Safe transaction.
     /// @param delegate Delegate whose allowance should be updated.
@@ -244,6 +249,9 @@ contract AllowanceModule is SignatureDecoder, Ownable {
         emit ExecuteAllowanceTransfer(address(safe), delegate, token, to, amount, allowance.nonce - 1);
     }
 
+    /// @dev Creates a task on Gelato PokeMe
+    /// @param token The token which will be transfered to delegate.
+    /// @param paymentToken Token that should be used to pay for the execution of the transfer.
     function createGelatoTask(address token, address paymentToken) external {
         if (paymentToken != ETH) require(paymentTokens[msg.sender][paymentToken], "payment token not whitelisted");
 
@@ -260,6 +268,9 @@ contract AllowanceModule is SignatureDecoder, Ownable {
         emit CreateGelatoTask(msg.sender, token, paymentToken);
     }
 
+    /// @dev Cancel task on Gelato PokeMe
+    /// @param token The token which will be transfered to delegate.
+    /// @param paymentToken Token that should be used to pay for the execution of the transfer.
     function cancelGelatoTask(address token, address paymentToken) external {
         bytes memory resolverData = abi.encodeWithSignature("checker(address,address)", msg.sender, token);
         bytes32 resolverHash = IGelatoPokeMe(GELATO_POKE_ME).getResolverHash(resolver, resolverData);
