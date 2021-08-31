@@ -16,9 +16,35 @@ interface GnosisSafe {
         returns (bool success);
 }
 
-interface IGelatPokeMe {
+interface IGelatoPokeMe {
     /// @notice Helper func to query fee and feeToken
     function getFeeDetails() external view returns (uint256, address);  
+
+    function getSelector(string calldata _func) external pure returns (bytes4);
+
+    function getResolverHash(
+        address _resolverAddress,
+        bytes memory _resolverData
+    ) external pure returns (bytes32);
+
+    function getTaskId(
+        address _taskCreator,
+        address _execAddress,
+        bytes4 _selector,
+        bool _useTaskTreasuryFunds,
+        address _feeToken,
+        bytes32 _resolverHash
+    ) external pure returns (bytes32);
+
+    function createTaskNoPrepayment(
+        address _execAddress,
+        bytes4 _execSelector,
+        address _resolverAddress,
+        bytes calldata _resolverData,
+        address _feeToken
+    ) external;
+
+    function cancelTask(bytes32 _taskId) external;
 }
 
 contract AllowanceModule is SignatureDecoder, Ownable {
@@ -26,7 +52,8 @@ contract AllowanceModule is SignatureDecoder, Ownable {
     string public constant NAME = "Allowance Module";
     string public constant VERSION = "0.1.0";
     address payable public GELATO = 0x3CACa7b48D0573D793d3b0279b5F0029180E83b6;
-    address public GELATO_POKE_ME = 0x8bee7c6A531cBD0a4B5b9ac76792eEDe16b7b317; // DEPLOY NEW POKE_ME
+    address public GELATO_POKE_ME = 0xB3f5503f93d5Ef84b06993a1975B9D21B962892F; // DEPLOY NEW POKE_ME
+    address public RESOLVER;
     address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
     uint256 public gasLimit = 10**6;
     
@@ -79,9 +106,11 @@ contract AllowanceModule is SignatureDecoder, Ownable {
     event DeleteAllowance(address indexed safe, address delegate, address token);
     event NewMaxGasPrice(address indexed safe, uint256 newMaxGasPrice);
     event SetGelatoAddress(address indexed oldGelato, address indexed newGelato);
+    event SetResolverAddress(address indexed oldResolver, address indexed newResolver);
     event SetPaymentToken(address indexed paymentToken);
     event RemovePaymentToken(address indexed paymentToken);
-
+    event CreateGelatoTask(address indexed safe, address token, address paymentToken);
+    event CancelGelatoTask(address indexed safe, address token, address paymentToken);
 
     /// @dev Allows to update the allowance for a specified token. This can only be done via a Safe transaction.
     /// @param delegate Delegate whose allowance should be updated.
@@ -195,7 +224,7 @@ contract AllowanceModule is SignatureDecoder, Ownable {
  
         if (payment > 0 && msg.sender == GELATO_POKE_ME) {
             uint256 payment256;
-            (payment256, paymentToken) = IGelatPokeMe(GELATO_POKE_ME).getFeeDetails();
+            (payment256, paymentToken) = IGelatoPokeMe(GELATO_POKE_ME).getFeeDetails();
             payment = uint96(payment256);
             require(payment == payment256, "No overflow");
             if (paymentToken == ETH) {
@@ -212,6 +241,42 @@ contract AllowanceModule is SignatureDecoder, Ownable {
               // Transfer token
         transfer(safe, token, to, amount);
         emit ExecuteAllowanceTransfer(address(safe), delegate, token, to, amount, allowance.nonce - 1);
+    }
+
+    function createGelatoTask(address token, address paymentToken) external {
+        require(paymentTokens[msg.sender][paymentToken], "payment token not whitelisted");
+
+        bytes4 resolverSelector = IGelatoPokeMe(GELATO_POKE_ME).getSelector("checker(address,address)");
+        bytes memory resolverData = abi.encodeWithSelector(resolverSelector, msg.sender, token);
+
+        IGelatoPokeMe(GELATO_POKE_ME).createTaskNoPrepayment(
+            address(this),
+            this.executeAllowanceTransfer.selector,
+            RESOLVER,
+            resolverData,
+            paymentToken
+        );
+
+        emit CreateGelatoTask(msg.sender, token, paymentToken);
+    }
+
+    function cancelGelatoTask(address token, address paymentToken) external {
+        bytes4 resolverSelector = IGelatoPokeMe(GELATO_POKE_ME).getSelector("checker(address,address)");
+        bytes memory resolverData = abi.encodeWithSelector(resolverSelector, msg.sender, token);
+        bytes32 resolverHash = IGelatoPokeMe(GELATO_POKE_ME).getResolverHash(RESOLVER, resolverData);
+
+        bytes32 taskId = IGelatoPokeMe(GELATO_POKE_ME).getTaskId(
+            msg.sender, 
+            address(this), 
+            this.executeAllowanceTransfer.selector, 
+            false, 
+            paymentToken, 
+            resolverHash
+        );
+
+        IGelatoPokeMe(GELATO_POKE_ME).cancelTask(taskId);
+
+        emit CancelGelatoTask(msg.sender, token, paymentToken);
     }
 
     /// @dev Returns the chain id used by this contract.
@@ -351,6 +416,13 @@ contract AllowanceModule is SignatureDecoder, Ownable {
         address oldGelato = GELATO;
         GELATO = newGelato;
         emit SetGelatoAddress(oldGelato, newGelato);
+    }
+
+    function setResolverAddress(address newResolver) public onlyOwner {
+        require(newResolver != address(0), "Address Can't be Zero");
+        address oldResolver = RESOLVER;
+        RESOLVER = newResolver;
+        emit SetResolverAddress(oldResolver, newResolver);
     }
 
     /// @dev Allows to remove a delegate.

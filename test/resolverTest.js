@@ -17,6 +17,7 @@ contract('Resolver test', function(accounts) {
     let lw
     let gnosisSafe
     let safeModule
+    let resolver
 
     const CALL = 0
     const ADDRESS_0 = "0x0000000000000000000000000000000000000000"
@@ -27,12 +28,24 @@ contract('Resolver test', function(accounts) {
         lw = await utils.createLightwallet()
 
         // Create Master Copies
-        safeModule = await AllowanceModule.new()
+        safeModule = await AllowanceModule.new({from: accounts[0]})
+
+        resolver = await Resolver.new(safeModule.address, {from: accounts[0]})
+
+        await safeModule.contract.methods.setResolverAddress(resolver.address).send({from: accounts[0]})
+        let resolverAddress = await safeModule.RESOLVER()
+        assert.equal(resolverAddress, resolver.address)
 
         const gnosisSafeMasterCopy = await GnosisSafe.new({ from: accounts[0] })
         const proxy = await GnosisSafeProxy.new(gnosisSafeMasterCopy.address, { from: accounts[0] })
         gnosisSafe = await GnosisSafe.at(proxy.address)
         await gnosisSafe.setup([lw.accounts[0], lw.accounts[1], accounts[1]], 2, ADDRESS_0, "0x", ADDRESS_0, ADDRESS_0, 0, ADDRESS_0, { from: accounts[0] })
+
+        let enableModuleData = await gnosisSafe.contract.methods.enableModule(safeModule.address).encodeABI()
+        await execTransaction(gnosisSafe.address, 0, enableModuleData, CALL, "enable module")
+        let modules = await gnosisSafe.getModules()
+        assert.equal(1, modules.length)
+        assert.equal(safeModule.address, modules[0])
     })
 
     let execTransaction = async function(to, value, data, operation, message) {
@@ -45,18 +58,21 @@ contract('Resolver test', function(accounts) {
         )
     }
 
-    it('Resolver should return true when one or more delegate has allowance', async () => {
-        const resolver = await Resolver.new(safeModule.address, {from: accounts[0]})
+    it("Should create task", async () => {
+        let setPaymenTokenData = await safeModule.contract.methods.setPaymentToken(ETH_ADDRESS).encodeABI()
+        await execTransaction(safeModule.address, 0, setPaymenTokenData, CALL, "set payment token")
+        
+        const isEthPaymentToken = await safeModule.contract.methods.paymentTokens(gnosisSafe.address, ETH_ADDRESS).call()
+        assert.equal(isEthPaymentToken, true)
 
+        let createGelatoTaskData = await safeModule.contract.methods.createGelatoTask(ETH_ADDRESS, ETH_ADDRESS).encodeABI()
+        await execTransaction(safeModule.address, 0, createGelatoTaskData, CALL, "create gelato task")
+    })
+
+    it('Resolver should return true when one or more delegate has allowance', async () => {
         const token = await TestToken.new({from: accounts[0]})
         await token.transfer(gnosisSafe.address, 1000, {from: accounts[0]}) 
         
-        let enableModuleData = await gnosisSafe.contract.methods.enableModule(safeModule.address).encodeABI()
-        await execTransaction(gnosisSafe.address, 0, enableModuleData, CALL, "enable module")
-        let modules = await gnosisSafe.getModules()
-        assert.equal(1, modules.length)
-        assert.equal(safeModule.address, modules[0])
-
         // Add delegates
         let addDelegateData = await safeModule.contract.methods.addDelegate(lw.accounts[4]).encodeABI()
         await execTransaction(safeModule.address, 0, addDelegateData, CALL, "add delegate 1")
