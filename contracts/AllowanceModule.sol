@@ -51,9 +51,9 @@ contract AllowanceModule is SignatureDecoder, Ownable {
  
     string public constant NAME = "Allowance Module";
     string public constant VERSION = "0.1.0";
-    address payable public GELATO = 0x3CACa7b48D0573D793d3b0279b5F0029180E83b6;
-    address public GELATO_POKE_ME = 0xB3f5503f93d5Ef84b06993a1975B9D21B962892F; // DEPLOY NEW POKE_ME
-    address public RESOLVER;
+    address payable public constant GELATO = 0x3CACa7b48D0573D793d3b0279b5F0029180E83b6;
+    address public constant GELATO_POKE_ME = 0xB3f5503f93d5Ef84b06993a1975B9D21B962892F;
+    address public resolver;
     address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
     uint256 public gasLimit = 10**6;
     
@@ -238,21 +238,21 @@ contract AllowanceModule is SignatureDecoder, Ownable {
              // solium-disable-next-line
             emit PayAllowanceTransfer(address(safe), delegate, paymentToken, GELATO, payment);
             }
-              // Transfer token
+        
+        // Transfer token
         transfer(safe, token, to, amount);
         emit ExecuteAllowanceTransfer(address(safe), delegate, token, to, amount, allowance.nonce - 1);
     }
 
     function createGelatoTask(address token, address paymentToken) external {
-        require(paymentTokens[msg.sender][paymentToken], "payment token not whitelisted");
+        if (paymentToken != ETH) require(paymentTokens[msg.sender][paymentToken], "payment token not whitelisted");
 
-        bytes4 resolverSelector = IGelatoPokeMe(GELATO_POKE_ME).getSelector("checker(address,address)");
-        bytes memory resolverData = abi.encodeWithSelector(resolverSelector, msg.sender, token);
+        bytes memory resolverData = abi.encodeWithSignature("checker(address,address)", msg.sender, token);
 
         IGelatoPokeMe(GELATO_POKE_ME).createTaskNoPrepayment(
             address(this),
             this.executeAllowanceTransfer.selector,
-            RESOLVER,
+            resolver,
             resolverData,
             paymentToken
         );
@@ -261,12 +261,11 @@ contract AllowanceModule is SignatureDecoder, Ownable {
     }
 
     function cancelGelatoTask(address token, address paymentToken) external {
-        bytes4 resolverSelector = IGelatoPokeMe(GELATO_POKE_ME).getSelector("checker(address,address)");
-        bytes memory resolverData = abi.encodeWithSelector(resolverSelector, msg.sender, token);
-        bytes32 resolverHash = IGelatoPokeMe(GELATO_POKE_ME).getResolverHash(RESOLVER, resolverData);
+        bytes memory resolverData = abi.encodeWithSignature("checker(address,address)", msg.sender, token);
+        bytes32 resolverHash = IGelatoPokeMe(GELATO_POKE_ME).getResolverHash(resolver, resolverData);
 
         bytes32 taskId = IGelatoPokeMe(GELATO_POKE_ME).getTaskId(
-            msg.sender, 
+            address(this), 
             address(this), 
             this.executeAllowanceTransfer.selector, 
             false, 
@@ -409,19 +408,12 @@ contract AllowanceModule is SignatureDecoder, Ownable {
         emit NewMaxGasPrice(msg.sender, newMaxGasPrice);
     }
 
-    /// @dev Allows to update gelato address
-    /// @param newGelato New gelato address
-    function setGelatoAddress(address payable newGelato) public onlyOwner {
-        require(newGelato != address(0), "Address Can't be Zero");
-        address oldGelato = GELATO;
-        GELATO = newGelato;
-        emit SetGelatoAddress(oldGelato, newGelato);
-    }
-
+    /// @dev Allows to update the resolver
+    /// @param newResolver New resoler address
     function setResolverAddress(address newResolver) public onlyOwner {
         require(newResolver != address(0), "Address Can't be Zero");
-        address oldResolver = RESOLVER;
-        RESOLVER = newResolver;
+        address oldResolver = resolver;
+        resolver = newResolver;
         emit SetResolverAddress(oldResolver, newResolver);
     }
 
