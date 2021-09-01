@@ -8,16 +8,20 @@ GnosisSafe.setProvider(web3.currentProvider)
 const GnosisSafeProxyBuildInfo = require("@gnosis.pm/safe-contracts/build/contracts/GnosisSafeProxy.json")
 const GnosisSafeProxy = truffleContract(GnosisSafeProxyBuildInfo)
 GnosisSafeProxy.setProvider(web3.currentProvider)
+const PokeMeAbi = require("./abi/PokeMe.json")
+
 
 const AllowanceModule = artifacts.require("./AllowanceModule.sol")
 const TestToken = artifacts.require("./TestToken.sol")
 const Resolver = artifacts.require("./Resolver.sol")
+
 
 contract('Resolver test', function(accounts) {
     let lw
     let gnosisSafe
     let safeModule
     let resolver
+    let pokeme
 
     const CALL = 0
     const ADDRESS_0 = "0x0000000000000000000000000000000000000000"
@@ -34,8 +38,10 @@ contract('Resolver test', function(accounts) {
 
         resolver = await Resolver.new(safeModule.address, {from: accounts[0]})
 
+        pokeme = new web3.eth.Contract(PokeMeAbi, GELATO_POKE_ME)
+
         await safeModule.contract.methods.setResolverAddress(resolver.address).send({from: accounts[0]})
-        let resolverAddress = await safeModule.RESOLVER()
+        let resolverAddress = await safeModule.resolver()
         assert.equal(resolverAddress, resolver.address)
 
         const gnosisSafeMasterCopy = await GnosisSafe.new({ from: accounts[0] })
@@ -60,16 +66,77 @@ contract('Resolver test', function(accounts) {
         )
     }
 
-    it("Should create task", async () => {
+    it("Should create and cancel task", async () => {
         let setPaymenTokenData = await safeModule.contract.methods.setPaymentToken(ETH_ADDRESS).encodeABI()
         await execTransaction(safeModule.address, 0, setPaymenTokenData, CALL, "set payment token")
         
         const isEthPaymentToken = await safeModule.contract.methods.paymentTokens(gnosisSafe.address, ETH_ADDRESS).call()
         assert.equal(isEthPaymentToken, true)
 
+        // Create Gelato Task
         let createGelatoTaskData = await safeModule.contract.methods.createGelatoTask(ETH_ADDRESS, ETH_ADDRESS).encodeABI()
         await execTransaction(safeModule.address, 0, createGelatoTaskData, CALL, "create gelato task")
+
+        let moduleCreateEventArgs
+        await safeModule.getPastEvents('CreateGelatoTask').then(function(events){moduleCreateEventArgs = events[0].args})
+        assert.equal(moduleCreateEventArgs.safe, gnosisSafe.address)
+        assert.equal(moduleCreateEventArgs.token, ETH_ADDRESS)
+        assert.equal(moduleCreateEventArgs.paymentToken, ETH_ADDRESS)
+
+        const expectedSelector = web3.eth.abi.encodeFunctionSignature('executeAllowanceTransfer(address,address,address,uint96,address,uint96,address,bytes)');
+
+        const expectedResolverData = web3.eth.abi.encodeFunctionCall({
+            name: 'checker',
+            type: 'function',
+            inputs: [{
+                type: 'address',
+                name: '_safe'
+            },{
+                type: 'address',
+                name: '_safe'
+            }]
+        }, [gnosisSafe.address, ETH_ADDRESS]);
+
+        const expectedResolverHash = await pokeme.methods.getResolverHash(resolver.address, expectedResolverData).call()
+
+        const expectedTaskId = await pokeme.methods.getTaskId(safeModule.address, safeModule.address, expectedSelector, false, ETH_ADDRESS, expectedResolverHash).call()
+
+        let pokeMeCreateEventArgs
+        await pokeme.getPastEvents('TaskCreated').then(function(events){pokeMeCreateEventArgs = events[0].returnValues})
+
+        assert.equal(pokeMeCreateEventArgs.taskCreator, safeModule.address)
+        assert.equal(pokeMeCreateEventArgs.execAddress, safeModule.address)
+        assert.equal(pokeMeCreateEventArgs.selector, expectedSelector)
+        assert.equal(pokeMeCreateEventArgs.resolverAddress, resolver.address)
+        assert.equal(pokeMeCreateEventArgs.taskId, expectedTaskId)
+        assert.equal(pokeMeCreateEventArgs.resolverData, expectedResolverData)
+        assert.equal(pokeMeCreateEventArgs.useTaskTreasuryFunds, false)
+        assert.equal(pokeMeCreateEventArgs.feeToken, ETH_ADDRESS)
+        assert.equal(pokeMeCreateEventArgs.resolverHash, expectedResolverHash)
+
+        let tasksOfSafe = await pokeme.methods.getTaskIdsByUser(safeModule.address).call()
+        assert.equal(tasksOfSafe[0], expectedTaskId)
+
+        // Cancel Gelato Task
+        let cancelGelatoTaskData = await safeModule.contract.methods.cancelGelatoTask(ETH_ADDRESS, ETH_ADDRESS).encodeABI()
+        await execTransaction(safeModule.address, 0, cancelGelatoTaskData, CALL, "cancel gelato task")
+
+        let moduleCancelEventArgs
+        await safeModule.getPastEvents('CancelGelatoTask').then(function(events){moduleCancelEventArgs = events[0].args})
+        assert.equal(moduleCancelEventArgs.safe, gnosisSafe.address)
+        assert.equal(moduleCancelEventArgs.token, ETH_ADDRESS)
+        assert.equal(moduleCancelEventArgs.paymentToken, ETH_ADDRESS)
+
+        let pokeMeCancelEventArgs
+        await pokeme.getPastEvents('TaskCancelled').then(function(events){pokeMeCancelEventArgs = events[0].returnValues})
+        assert.equal(pokeMeCancelEventArgs.taskId, expectedTaskId)
+        assert.equal(pokeMeCancelEventArgs.taskCreator, safeModule.address)
+
+        tasksOfSafe = await pokeme.methods.getTaskIdsByUser(safeModule.address).call()
+        assert.equal(tasksOfSafe.length, 0)
     })
+
+  
 
     it('Resolver should return true when one or more delegate has allowance', async () => {
         const token = await TestToken.new({from: accounts[0]})
@@ -121,7 +188,6 @@ contract('Resolver test', function(accounts) {
         let checkerResult3 = await resolver.contract.methods.checker(gnosisSafe.address, token.address).call();
         assert.equal(checkerResult3.canExec, false)
         assert.equal(checkerResult3.execPayload, null)
-
     })
 
 })
