@@ -1,6 +1,7 @@
 const utils = require('@gnosis.pm/safe-contracts/test/utils/general')
 
 const truffleContract = require("@truffle/contract")
+const truffleAssert = require('truffle-assertions');
 
 const GnosisSafeBuildInfo = require("@gnosis.pm/safe-contracts/build/contracts/GnosisSafe.json")
 const GnosisSafe = truffleContract(GnosisSafeBuildInfo)
@@ -116,6 +117,12 @@ contract('Resolver test', function(accounts) {
 
         let tasksOfSafe = await pokeme.methods.getTaskIdsByUser(safeModule.address).call()
         assert.equal(tasksOfSafe[0], expectedTaskId)
+
+        // Cannot cancel task if not owner
+        await truffleAssert.reverts(
+            safeModule.contract.methods.cancelGelatoTask(ETH_ADDRESS, ETH_ADDRESS).call(),
+            "PokeMe: cancelTask: Sender did not start task yet"
+        )
 
         // Cancel Gelato Task
         let cancelGelatoTaskData = await safeModule.contract.methods.cancelGelatoTask(ETH_ADDRESS, ETH_ADDRESS).encodeABI()
