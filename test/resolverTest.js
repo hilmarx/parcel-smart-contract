@@ -124,6 +124,10 @@ contract('Resolver test', function(accounts) {
             "PokeMe: cancelTask: Sender did not start task yet"
         )
 
+        const [isActive, taskId] = await safeModule.contract.methods.getTaskId(gnosisSafe.address, ETH_ADDRESS, ETH_ADDRESS).call()
+        console.log(isActive)
+        console.log(taskId)
+
         // Cancel Gelato Task
         let cancelGelatoTaskData = await safeModule.contract.methods.cancelGelatoTask(ETH_ADDRESS, ETH_ADDRESS).encodeABI()
         await execTransaction(safeModule.address, 0, cancelGelatoTaskData, CALL, "cancel gelato task")

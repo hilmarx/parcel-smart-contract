@@ -44,6 +44,11 @@ interface IGelatoPokeMe {
         address _feeToken
     ) external returns (bytes32 task);
 
+    function getTaskIdsByUser(address _taskCreator)
+        external
+        view
+        returns (bytes32[] memory);
+
     function cancelTask(bytes32 _taskId) external;
 }
 
@@ -287,6 +292,28 @@ contract AllowanceModule is SignatureDecoder, Ownable {
         IGelatoPokeMe(GELATO_POKE_ME).cancelTask(taskId);
 
         emit CancelGelatoTask(msg.sender, token, paymentToken, taskId);
+    }
+
+    function getTaskId(address safe, address token, address paymentToken) external view returns(bool isActive, bytes32 task) {
+        bytes memory resolverData = abi.encodeWithSignature("checker(address,address)", safe, token);
+        bytes32 resolverHash = IGelatoPokeMe(GELATO_POKE_ME).getResolverHash(resolver, resolverData);
+
+        task = IGelatoPokeMe(GELATO_POKE_ME).getTaskId(
+            address(this), 
+            address(this), 
+            this.executeAllowanceTransfer.selector, 
+            false, 
+            paymentToken, 
+            resolverHash
+        );
+
+        bytes32[] memory taskIds = IGelatoPokeMe(GELATO_POKE_ME).getTaskIdsByUser(address(this));
+        for (uint256 i = 0; i < taskIds.length; i++) {
+            if (task == taskIds[i]) {
+                isActive = true;
+                break;
+            }
+        }
     }
 
     /// @dev Returns the chain id used by this contract.
