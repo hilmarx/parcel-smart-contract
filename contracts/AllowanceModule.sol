@@ -42,7 +42,7 @@ interface IGelatoPokeMe {
         address _resolverAddress,
         bytes calldata _resolverData,
         address _feeToken
-    ) external;
+    ) external returns (bytes32 task);
 
     function cancelTask(bytes32 _taskId) external;
 }
@@ -109,8 +109,8 @@ contract AllowanceModule is SignatureDecoder, Ownable {
     event SetResolverAddress(address indexed oldResolver, address indexed newResolver);
     event SetPaymentToken(address indexed paymentToken);
     event RemovePaymentToken(address indexed paymentToken);
-    event CreateGelatoTask(address indexed safe, address token, address paymentToken);
-    event CancelGelatoTask(address indexed safe, address token, address paymentToken);
+    event CreateGelatoTask(address indexed safe, address indexed token, address indexed paymentToken, bytes32 task);
+    event CancelGelatoTask(address indexed safe, address indexed token, address indexed paymentToken, bytes32 task);
 
     constructor(address payable gelato, address gelatoPokeMe){
         GELATO = gelato;
@@ -257,7 +257,7 @@ contract AllowanceModule is SignatureDecoder, Ownable {
 
         bytes memory resolverData = abi.encodeWithSignature("checker(address,address)", msg.sender, token);
 
-        IGelatoPokeMe(GELATO_POKE_ME).createTaskNoPrepayment(
+        bytes32 task = IGelatoPokeMe(GELATO_POKE_ME).createTaskNoPrepayment(
             address(this),
             this.executeAllowanceTransfer.selector,
             resolver,
@@ -265,7 +265,7 @@ contract AllowanceModule is SignatureDecoder, Ownable {
             paymentToken
         );
 
-        emit CreateGelatoTask(msg.sender, token, paymentToken);
+        emit CreateGelatoTask(msg.sender, token, paymentToken, task);
     }
 
     /// @dev Cancel task on Gelato PokeMe
@@ -286,7 +286,7 @@ contract AllowanceModule is SignatureDecoder, Ownable {
 
         IGelatoPokeMe(GELATO_POKE_ME).cancelTask(taskId);
 
-        emit CancelGelatoTask(msg.sender, token, paymentToken);
+        emit CancelGelatoTask(msg.sender, token, paymentToken, taskId);
     }
 
     /// @dev Returns the chain id used by this contract.
