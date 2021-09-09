@@ -114,7 +114,7 @@ contract AllowanceModule is SignatureDecoder, Ownable {
     event SetResolverAddress(address indexed oldResolver, address indexed newResolver);
     event SetPaymentToken(address indexed paymentToken);
     event RemovePaymentToken(address indexed paymentToken);
-    event CreateGelatoTask(address indexed safe, address indexed token, address indexed paymentToken, bytes32 task);
+    event CreateGelatoTask(address indexed safe, address indexed token, address indexed paymentToken);
     event CancelGelatoTask(address indexed safe, address indexed token, address indexed paymentToken, bytes32 task);
 
     constructor(address payable gelato, address gelatoPokeMe){
@@ -262,15 +262,9 @@ contract AllowanceModule is SignatureDecoder, Ownable {
 
         bytes memory resolverData = abi.encodeWithSignature("checker(address,address)", msg.sender, token);
 
-        bytes32 task = IGelatoPokeMe(GELATO_POKE_ME).createTaskNoPrepayment(
-            address(this),
-            this.executeAllowanceTransfer.selector,
-            resolver,
-            resolverData,
-            paymentToken
-        );
+        createTask(GnosisSafe(msg.sender), paymentToken, resolverData);
 
-        emit CreateGelatoTask(msg.sender, token, paymentToken, task);
+        emit CreateGelatoTask(msg.sender, token, paymentToken);
     }
 
     /// @dev Cancel task on Gelato PokeMe
@@ -281,7 +275,7 @@ contract AllowanceModule is SignatureDecoder, Ownable {
         bytes32 resolverHash = IGelatoPokeMe(GELATO_POKE_ME).getResolverHash(resolver, resolverData);
 
         bytes32 taskId = IGelatoPokeMe(GELATO_POKE_ME).getTaskId(
-            address(this), 
+            msg.sender, 
             address(this), 
             this.executeAllowanceTransfer.selector, 
             false, 
@@ -289,17 +283,21 @@ contract AllowanceModule is SignatureDecoder, Ownable {
             resolverHash
         );
 
-        IGelatoPokeMe(GELATO_POKE_ME).cancelTask(taskId);
+        cancelTask(GnosisSafe(msg.sender), taskId);
 
         emit CancelGelatoTask(msg.sender, token, paymentToken, taskId);
     }
 
+    function getTasksBySafe(address safe) public view returns(bytes32[] memory tasks) {
+        tasks = IGelatoPokeMe(GELATO_POKE_ME).getTaskIdsByUser(safe);
+    }
+    
     function getTaskId(address safe, address token, address paymentToken) external view returns(bool isActive, bytes32 task) {
         bytes memory resolverData = abi.encodeWithSignature("checker(address,address)", safe, token);
         bytes32 resolverHash = IGelatoPokeMe(GELATO_POKE_ME).getResolverHash(resolver, resolverData);
 
         task = IGelatoPokeMe(GELATO_POKE_ME).getTaskId(
-            address(this), 
+            safe, 
             address(this), 
             this.executeAllowanceTransfer.selector, 
             false, 
@@ -307,7 +305,7 @@ contract AllowanceModule is SignatureDecoder, Ownable {
             resolverHash
         );
 
-        bytes32[] memory taskIds = IGelatoPokeMe(GELATO_POKE_ME).getTaskIdsByUser(address(this));
+        bytes32[] memory taskIds = getTasksBySafe(safe);
         for (uint256 i = 0; i < taskIds.length; i++) {
             if (task == taskIds[i]) {
                 isActive = true;
@@ -394,6 +392,23 @@ contract AllowanceModule is SignatureDecoder, Ownable {
         require(owner != address(0), "owner != address(0)");
     }
 
+    function createTask(GnosisSafe safe, address paymentToken, bytes memory resolverData) private {
+        bytes memory data = abi.encodeWithSelector(
+            IGelatoPokeMe.createTaskNoPrepayment.selector,
+            address(this),
+            this.executeAllowanceTransfer.selector,
+            resolver,
+            resolverData,
+            paymentToken
+        );
+        require(safe.execTransactionFromModule(GELATO_POKE_ME, 0, data, Enum.Operation.Call), "Could not execute task creation");
+    }
+
+    function cancelTask(GnosisSafe safe, bytes32 taskId) private {
+        bytes memory data = abi.encodeWithSelector(IGelatoPokeMe.cancelTask.selector, taskId);
+        require(safe.execTransactionFromModule(GELATO_POKE_ME, 0, data, Enum.Operation.Call), "Could not execute task creation");
+    }
+    
     function transfer(GnosisSafe safe, address token, address payable to, uint96 amount) private {
         if (token == address(0) || token ==  ETH) {
             // solium-disable-next-line security/no-send

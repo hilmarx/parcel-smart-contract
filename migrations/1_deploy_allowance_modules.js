@@ -1,11 +1,23 @@
 const AllowanceModule = artifacts.require("AllowanceModule");
-const GELATO = "0x3CACa7b48D0573D793d3b0279b5F0029180E83b6"
-const GELATO_POKE_ME = "0xB3f5503f93d5Ef84b06993a1975B9D21B962892F"
+const Resolver = artifacts.require("Resolver");
 
+//RINKEBY
+const GELATO = "0x0630d1b8C2df3F0a68Df578D02075027a6397173";
+const GELATO_POKE_ME = "0x8c089073A9594a4FB03Fa99feee3effF0e2Bc58a";
 
-module.exports = function(deployer, network, accounts) {
-  console.log(network)
+module.exports = function (deployer, network, accounts) {
   deployer.then(async () => {
-    await deployer.deploy(AllowanceModule, GELATO, GELATO_POKE_ME, {from: accounts[0]});
-  })
+    const allowanceModule = await deployer.deploy(
+      AllowanceModule,
+      GELATO,
+      GELATO_POKE_ME,
+      {
+        from: accounts[0],
+      }
+    );
+
+    await deployer.deploy(Resolver, allowanceModule.address, {
+      from: accounts[0],
+    });
+  });
 };

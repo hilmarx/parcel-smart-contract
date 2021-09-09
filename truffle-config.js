@@ -4,6 +4,7 @@ const package = require('./package')
 const mnemonic = process.env.MNEMONIC
 const matic_mnemonic = process.env.MATIC_MNEMONIC
 const token = process.env.INFURA_TOKEN
+const etherscan_api = process.env.ETHERSCAN_API
 
 module.exports = {
   networks: {
@@ -87,5 +88,11 @@ module.exports = {
         }
       }
     }
+  },
+  plugins: [
+    'truffle-plugin-verify'
+  ],
+  api_keys: {
+    etherscan: etherscan_api
   }
 };
