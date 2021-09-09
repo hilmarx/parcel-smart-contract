@@ -275,7 +275,7 @@ contract AllowanceModule is SignatureDecoder, Ownable {
         bytes32 resolverHash = IGelatoPokeMe(GELATO_POKE_ME).getResolverHash(resolver, resolverData);
 
         bytes32 taskId = IGelatoPokeMe(GELATO_POKE_ME).getTaskId(
-            address(this), 
+            msg.sender, 
             address(this), 
             this.executeAllowanceTransfer.selector, 
             false, 

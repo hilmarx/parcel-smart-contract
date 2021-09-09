@@ -100,12 +100,12 @@ contract('Resolver test', function(accounts) {
 
         const expectedResolverHash = await pokeme.methods.getResolverHash(resolver.address, expectedResolverData).call()
 
-        const expectedTaskId = await pokeme.methods.getTaskId(safeModule.address, safeModule.address, expectedSelector, false, ETH_ADDRESS, expectedResolverHash).call()
+        const expectedTaskId = await pokeme.methods.getTaskId(gnosisSafe.address, safeModule.address, expectedSelector, false, ETH_ADDRESS, expectedResolverHash).call()
 
         let pokeMeCreateEventArgs
         await pokeme.getPastEvents('TaskCreated').then(function(events){pokeMeCreateEventArgs = events[0].returnValues})
 
-        assert.equal(pokeMeCreateEventArgs.taskCreator, safeModule.address)
+        assert.equal(pokeMeCreateEventArgs.taskCreator, gnosisSafe.address)
         assert.equal(pokeMeCreateEventArgs.execAddress, safeModule.address)
         assert.equal(pokeMeCreateEventArgs.selector, expectedSelector)
         assert.equal(pokeMeCreateEventArgs.resolverAddress, resolver.address)
@@ -115,22 +115,23 @@ contract('Resolver test', function(accounts) {
         assert.equal(pokeMeCreateEventArgs.feeToken, ETH_ADDRESS)
         assert.equal(pokeMeCreateEventArgs.resolverHash, expectedResolverHash)
 
-        let tasksOfSafe = await pokeme.methods.getTaskIdsByUser(safeModule.address).call()
+        let tasksOfSafe = await pokeme.methods.getTaskIdsByUser(gnosisSafe.address).call()
         assert.equal(tasksOfSafe[0], expectedTaskId)
 
         // Cannot cancel task if not owner
         await truffleAssert.reverts(
             safeModule.contract.methods.cancelGelatoTask(ETH_ADDRESS, ETH_ADDRESS).call(),
-            "PokeMe: cancelTask: Sender did not start task yet"
+            "Returned error: VM Exception while processing transaction: revert"
         )
 
-        const [isActive, taskId] = await safeModule.contract.methods.getTaskId(gnosisSafe.address, ETH_ADDRESS, ETH_ADDRESS).call()
-        console.log(isActive)
-        console.log(taskId)
+        const res = await safeModule.contract.methods.getTaskId(gnosisSafe.address, ETH_ADDRESS, ETH_ADDRESS).call()
+        assert.equal(res.isActive, true)
+        assert.equal(res.task, expectedTaskId)
 
         // Cancel Gelato Task
         let cancelGelatoTaskData = await safeModule.contract.methods.cancelGelatoTask(ETH_ADDRESS, ETH_ADDRESS).encodeABI()
         await execTransaction(safeModule.address, 0, cancelGelatoTaskData, CALL, "cancel gelato task")
+
 
         let moduleCancelEventArgs
         await safeModule.getPastEvents('CancelGelatoTask').then(function(events){moduleCancelEventArgs = events[0].args})
@@ -138,10 +139,11 @@ contract('Resolver test', function(accounts) {
         assert.equal(moduleCancelEventArgs.token, ETH_ADDRESS)
         assert.equal(moduleCancelEventArgs.paymentToken, ETH_ADDRESS)
 
+
         let pokeMeCancelEventArgs
         await pokeme.getPastEvents('TaskCancelled').then(function(events){pokeMeCancelEventArgs = events[0].returnValues})
         assert.equal(pokeMeCancelEventArgs.taskId, expectedTaskId)
-        assert.equal(pokeMeCancelEventArgs.taskCreator, safeModule.address)
+        assert.equal(pokeMeCancelEventArgs.taskCreator, gnosisSafe.address)
 
         tasksOfSafe = await pokeme.methods.getTaskIdsByUser(safeModule.address).call()
         assert.equal(tasksOfSafe.length, 0)
