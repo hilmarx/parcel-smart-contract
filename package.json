@@ -38,6 +38,7 @@
     "ganache-cli": "6.11.0",
     "ipfs-http-client": "^44.2.0",
     "run-with-testrpc": "^0.3.0",
+    "truffle-plugin-verify": "^0.5.14",
     "web3": "^1.2.6"
   },
   "dependencies": {
